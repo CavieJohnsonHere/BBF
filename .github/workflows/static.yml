@@ -28,7 +28,7 @@ jobs:
         run: bun install
 
       - name: Build static page
-        run: bun build ./website/main.html --outdir="./out"
+        run: bun build ./website/index.html --outdir="./out"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
