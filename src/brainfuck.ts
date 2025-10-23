@@ -3,12 +3,15 @@ export function brainfuck(
   {
     input = "",
     useNumberInputs = false,
+    bits = 16,
   }: {
     input: string;
     useNumberInputs: boolean;
+    bits: number;
   }
 ): string {
   const memorySize = 30000;
+  const cellSize = 2 ** bits;
   let memory: number[] = new Array(memorySize).fill(0);
   let dataPointer = 0;
   let instructionPointer = 0;
@@ -33,12 +36,12 @@ export function brainfuck(
     },
     "+": (mem, dp, ip) => {
       // Assert mem[dp] is a number. It always will be, but TS needs to be told.
-      mem[dp] = ((mem[dp] as number) + 1) % 256;
+      mem[dp] = ((mem[dp] as number) + 1) % bits;
       return [dp, ip + 1];
     },
     "-": (mem, dp, ip) => {
       // Assert mem[dp] is a number.
-      mem[dp] = ((mem[dp] as number) - 1 + 256) % 256;
+      mem[dp] = ((mem[dp] as number) - 1 + bits) % bits;
       return [dp, ip + 1];
     },
     ".": (mem, dp, ip) => {
