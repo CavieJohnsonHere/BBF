@@ -18,7 +18,31 @@ This language has 15 keywords:
 
 "Value" can be a variable or a number.
 
-You can visit [the website](https://caviejohnsonhere.github.io/BBF/) for a playground.
+You can visit [the website](https://caviejohnsonhere.github.io/BBF/) for a playground (it also has auto complete!).
+
+### Example code
+```bbf
+define a number
+define b number
+define temp number
+define counter number
+define SPACE char
+
+set a 1
+set b 1
+set counter 20
+set SPACE 32
+
+show a
+
+loop a {
+  show SPACE
+  show a
+  set temp a
+  set b temp
+  set a (math a + b)
+}
+```
 
 ## Development
 
