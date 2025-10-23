@@ -363,12 +363,13 @@ set SPACE 32
 
 show a
 
-loop a {
+loop counter {
   show SPACE
   show a
   set temp a
   set b temp
   set a (math a + b)
+  set counter (math counter - 1)
 }`;
     code = exampleCode;
     ta.value = exampleCode;
