@@ -1,4 +1,26 @@
-# hardwareemulator
+# BetterBrainfuck
+
+A compiler that compiles to Brainfuck.
+
+## Language
+
+This language has 15 keywords:
+
+|  keyword | Usage                                  | Explanation                                                                                                          |
+| -------: | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `define` | `define [variable] <char \| number>`   | Reserves space for a variable and points it to that location                                                         |
+|    `set` | `set [variable] [value]`               | Set's the value of a variable                                                                                        |
+|   `show` | `show [value]`                         | Shows a value. number by default, but may print characters if the variable is set to that                            |
+|  `input` | `input [variable]`                     | Puts the content of the input into a variable                                                                        |
+|   `loop` | `loop [value] {[code]}`                | Repeatedly runs code until the provided value is 0                                                                   |
+|     `if` | `if [value] {[code]}`                  | Runs code once if the provided value is not 0                                                                        |
+| `unsafe` | `unsafe [safety size] {[unsafe code]}` | EXPERIMENTAL: Reserves a safety block in memory for unsafe low-level operations, similar to the "asm" keyword in GCC |
+
+"Value" can be a variable or a number.
+
+You can visit [the website](https://caviejohnsonhere.github.io/BBF/) for a playground.
+
+## Development
 
 To install dependencies:
 
@@ -9,7 +31,7 @@ bun install
 To run:
 
 ```bash
-bun run index.ts
+bun ./website/index.html
 ```
 
 This project was created using `bun init` in bun v1.2.19. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
