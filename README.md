@@ -16,11 +16,12 @@ This language has 15 keywords:
 |     `if` | `if [value] {[code]}`                  | Runs code once if the provided value is not 0                                                                        |
 | `unsafe` | `unsafe [safety size] {[unsafe code]}` | EXPERIMENTAL: Reserves a safety block in memory for unsafe low-level operations, similar to the "asm" keyword in GCC |
 
-"Value" can be a variable or a number.
+"Value" can be a variable or a number or "max" (the maximum value of a cell).
 
 You can visit [the website](https://caviejohnsonhere.github.io/BBF/) for a playground (it also has auto complete!).
 
 ### Example code
+
 ```bbf
 define a number
 define b number
@@ -30,7 +31,7 @@ define SPACE char
 
 set a 1
 set b 1
-set counter 20
+set counter max
 set SPACE 32
 
 show a

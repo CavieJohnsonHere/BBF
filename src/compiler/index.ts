@@ -190,8 +190,6 @@ function add(a: number, b: number): number {
  * into the target cell, then subtracts the value
  * from `copiedB` from the target cell.
  * The original `a` and `b` cells are preserved.
- * (Note: This function is missing freeing `copiedA`
- * and `copiedB` unlike `add`.)
  *
  * * a  b  t  (a=10, b=7)
  * * 10 7  0
@@ -224,6 +222,14 @@ function subtract(a: number, b: number): number {
   moveTo(copiedB);
   brainfuckCode += "-";
   brainfuckCode += "]";
+
+  moveTo(copiedA);
+  clearCell();
+  memoryUsage.set(copiedA, null);
+
+  moveTo(copiedB);
+  clearCell();
+  memoryUsage.set(copiedB, null);
 
   return targetLocation;
 }
@@ -274,6 +280,12 @@ function evalValue(val: ValueToken): number {
     }
 
     throw new Error(`Unsupported nested operator ${val.operator}`);
+  } else if (val.tokenType == "Max") {
+    const loc = findEmptyLocation();
+    memoryUsage.set(loc, undefined);
+    moveTo(loc);
+    brainfuckCode += "[-]-";
+    return loc;
   }
   throw new Error("Unknown value token");
 }
@@ -474,6 +486,10 @@ export function compile(code: Token[], reset: boolean = true) {
         moveTo(resultCell);
         brainfuckCode += "-";
         brainfuckCode += "]";
+      } else if (token.value.tokenType === "Max") {
+        moveTo(targetLocation);
+        clearCell();
+        brainfuckCode += "-";
       }
     } else if (token.tokenType === "Show") {
       const valueLocation = evalValue(token.value);
@@ -504,7 +520,7 @@ export function compile(code: Token[], reset: boolean = true) {
       compile(token.body, false);
       moveTo(condCell);
       brainfuckCode += "]";
-    } else if (token.tokenType == "Input") {
+    } else if (token.tokenType === "Input") {
       const entry = Array.from(memoryUsage.entries()).find(
         ([, details]) => details?.variable === token.variable
       );

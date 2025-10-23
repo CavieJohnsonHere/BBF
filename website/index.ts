@@ -39,6 +39,7 @@ const keywords = new Set([
   "loop",
   "unsafe",
   "math",
+  "max",
 ]);
 const types = new Set(["number", "char"]);
 const vars = new Set<string>();
@@ -128,8 +129,8 @@ function showDiagnostics(errors: string[], warnings: string[]): void {
 
   if (!errors.length && !warnings.length) {
     diag.appendChild(
-      $c("div", [$txt("✅ No issues detected.")], {
-        class: "text-green-400",
+      $c("div", [$txt("No issues detected.")], {
+        class: "text-green-300",
       })
     );
     ($("#run") as HTMLButtonElement).disabled = false;
@@ -143,7 +144,7 @@ function showDiagnostics(errors: string[], warnings: string[]): void {
     diag.appendChild(header);
     for (const e of errors) {
       diag.appendChild(
-        $c("div", [$txt("• " + e)], { class: "text-red-400 text-sm" })
+        $c("div", [$txt("" + e)], { class: "text-red-300 text-sm" })
       );
     }
   }
@@ -357,7 +358,7 @@ define SPACE char
 
 set a 1
 set b 1
-set counter 20
+set counter max
 set SPACE 32
 
 show a

@@ -3,7 +3,7 @@ export function brainfuck(
   {
     input = "",
     useNumberInputs = false,
-    bits = 16,
+    bits = 8,
   }: {
     input: string;
     useNumberInputs: boolean;
@@ -36,12 +36,12 @@ export function brainfuck(
     },
     "+": (mem, dp, ip) => {
       // Assert mem[dp] is a number. It always will be, but TS needs to be told.
-      mem[dp] = ((mem[dp] as number) + 1) % bits;
+      mem[dp] = ((mem[dp] as number) + 1) % cellSize;
       return [dp, ip + 1];
     },
     "-": (mem, dp, ip) => {
       // Assert mem[dp] is a number.
-      mem[dp] = ((mem[dp] as number) - 1 + bits) % bits;
+      mem[dp] = ((mem[dp] as number) - 1 + cellSize) % cellSize;
       return [dp, ip + 1];
     },
     ".": (mem, dp, ip) => {

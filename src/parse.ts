@@ -1,6 +1,11 @@
 // AI Generated slop. Do not touch until I find out wtf it is doing.
 
-import type { ValueToken, Token, UnsafeToken, PrimitiveType } from "./compiler/tokens";
+import type {
+  ValueToken,
+  Token,
+  UnsafeToken,
+  PrimitiveType,
+} from "./compiler/tokens";
 
 type TokNumber = { kind: "number"; text: string };
 type TokIdent = { kind: "ident"; text: string };
@@ -108,9 +113,16 @@ function parseFactor(state: State): [ValueToken, State] {
     return [{ tokenType: "Literal", value: num }, advance(state, 1)];
   }
 
-  // variable
+  // variable or 'max' keyword
   if (t.kind === "ident") {
     const text = t.text;
+
+    // Check for the 'max' keyword
+    if (text === "max") {
+      return [{ tokenType: "Max" }, advance(state, 1)];
+    }
+
+    // Otherwise, it's a variable
     return [{ tokenType: "Variable", name: text }, advance(state, 1)];
   }
 
@@ -350,5 +362,6 @@ export function parseSourceToTokens(source: string): Token[] {
     tokens.push(stmt);
     state = s2;
   }
+
   return tokens;
 }

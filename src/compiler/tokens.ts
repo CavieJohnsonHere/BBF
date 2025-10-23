@@ -12,7 +12,7 @@ export type MathToken = {
   left: ValueToken;
   right: ValueToken;
 };
-export type ValueToken = LiteralToken | VariableToken | MathToken;
+export type ValueToken = LiteralToken | VariableToken | MathToken | MaxToken;
 
 // Statement Tokens
 export type DeclarationToken = {
@@ -40,6 +40,9 @@ export type InputToken = {
   tokenType: "Input";
   variable: string;
 };
+export type MaxToken = {
+  tokenType: "Max";
+}
 export type Unsafe = {
   tokenType: "Unsafe";
   safetySize: number;
