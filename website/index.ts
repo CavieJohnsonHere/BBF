@@ -348,6 +348,32 @@ function main(): void {
 
   /* run button */
   ($("#run") as HTMLButtonElement).addEventListener("click", run);
+  ($("#example") as HTMLButtonElement).addEventListener("click", () => {
+    const exampleCode = `define a number
+define b number
+define temp number
+define counter number
+define SPACE char
+
+set a 1
+set b 1
+set counter 20
+set SPACE 32
+
+show a
+
+loop a {
+  show SPACE
+  show a
+  set temp a
+  set b temp
+  set a (math a + b)
+}`;
+    code = exampleCode;
+    ta.value = exampleCode;
+    syncHighlight();
+    showAC();
+  });
 
   /* initial draw */
   syncHighlight();
