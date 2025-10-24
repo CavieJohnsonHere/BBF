@@ -42,13 +42,12 @@ export type InputToken = {
 };
 export type MaxToken = {
   tokenType: "Max";
-}
+};
 export type Unsafe = {
   tokenType: "Unsafe";
   safetySize: number;
   body: UnsafeToken[];
 };
-
 export type Token =
   | DeclarationToken
   | AssignToken
