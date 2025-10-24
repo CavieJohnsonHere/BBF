@@ -1,13 +1,15 @@
 export function brainfuck(
   code: string,
   {
-    input = "",
-    useNumberInputs = false,
-    bits = 8,
+    input,
+    useNumberInputs,
+    bits,
+    dumpCore,
   }: {
     input: string;
     useNumberInputs: boolean;
     bits: number;
+    dumpCore?: string;
   }
 ): string {
   const memorySize = 30000;
@@ -98,6 +100,13 @@ export function brainfuck(
       return [dp, ip + 1];
     },
   };
+
+  if (dumpCore) {
+    operations[dumpCore] = (mem, dp, ip) => {
+      console.log(memory);
+      return [dp, ip + 1];
+    };
+  }
 
   while (instructionPointer < code.length) {
     const instruction = code[instructionPointer];
