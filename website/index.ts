@@ -325,14 +325,14 @@ function showAC(): void {
 /* ---------- run ---------- */
 function run(): void {
   try {
-    const inputs = ($("#input") as HTMLInputElement).value;
+    const input = ($("#input") as HTMLInputElement).value;
     const compiled = compile(lastGoodTokens);
-    const numberBased = ($("#number-based") as HTMLInputElement).checked;
-    ($("#output") as HTMLDivElement).innerText = brainfuck(
-      compiled,
-      inputs,
-      numberBased
-    );
+    const useNumberInputs = ($("#number-based") as HTMLInputElement).checked;
+    ($("#output") as HTMLDivElement).innerText = brainfuck(compiled, {
+      input,
+      useNumberInputs,
+      bits: 8,
+    });
     ($("#brainfuck") as HTMLDivElement).innerText = compiled;
   } catch (err: any) {
     (
