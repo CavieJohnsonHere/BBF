@@ -192,12 +192,12 @@ function validateSource(): void {
   showDiagnostics(errors, warnings);
 }
 
-function syncHighlight(): void {
+function syncHighlight(checkToggle: boolean): void {
   const ta = $("textarea") as HTMLTextAreaElement;
   code = ta.value;
   ($("#code") as HTMLDivElement).innerHTML = highlightCode(code);
   updateLineNumbers();
-  validateSource();
+  if (checkToggle) validateSource();
 }
 
 function indentLevel(line: string): number {
@@ -209,7 +209,7 @@ function indentLevel(line: string): number {
   return Math.max(0, lvl);
 }
 
-function format(ta: HTMLTextAreaElement) {
+function format(ta: HTMLTextAreaElement, checkToggle: boolean) {
   const chars = code.split("\n").map((line) => Array.from(line));
 
   // remove leading spaces
@@ -248,7 +248,7 @@ function format(ta: HTMLTextAreaElement) {
 
   code = chars.map((line) => line.join("")).join("\n");
   ta.value = code;
-  syncHighlight();
+  syncHighlight(checkToggle);
   showAC();
 }
 
@@ -326,12 +326,14 @@ function showAC(): void {
 function run(): void {
   try {
     const input = ($("#input") as HTMLInputElement).value;
+    const checkToggle = ($("#check-toggle") as HTMLInputElement).checked;
     const compiled = compile(lastGoodTokens);
+    const bits = ($("#bits") as HTMLInputElement).value;
     const useNumberInputs = ($("#number-based") as HTMLInputElement).checked;
     ($("#output") as HTMLDivElement).innerText = brainfuck(compiled, {
       input,
       useNumberInputs,
-      bits: 8,
+      bits: parseInt(bits),
     });
     ($("#brainfuck") as HTMLDivElement).innerText = compiled;
   } catch (err: any) {
@@ -347,7 +349,7 @@ function main(): void {
 
   /* highlight on input */
   ta.addEventListener("input", () => {
-    syncHighlight();
+    syncHighlight(checkToggle);
     showAC();
   });
 
@@ -411,7 +413,7 @@ loop counter {
     showAC();
   });
   ($("#format") as HTMLButtonElement).addEventListener("click", () =>
-    format(ta)
+    format(ta, checkToggle);
   );
 
   /* initial draw */

@@ -86,11 +86,11 @@
     >
       <div>
         <div class="p-2 text-white">Output</div>
-        <div id="output"></div>
+        <div id="output" class="h-50 overflow-y-auto bg-stone-950 p-5"></div>
       </div>
       <div>
         <div class="p-2 text-white">Brainfuck</div>
-        <div id="brainfuck" class="text-wrap"></div>
+        <div id="brainfuck" class="h-50 overflow-y-auto bg-stone-950 p-5 text-wrap"></div>
       </div>
       <div>
         <div class="p-2 text-white">Input</div>
@@ -104,7 +104,28 @@
           >Use number-based input</span
         >
       </div>
-      <div id="diagnostics" class="text-sm font-mono p-2"></div>
+
+      <div>
+        <div class="p-2 text-white">Settings</div>
+
+        <div class="flex gap-3 items-center">
+          <div>Bits per cell</div>
+          <input
+            id="bits"
+            type="number"
+            value="8"
+            min="4"
+            max="16"
+            class="block mb-2 placeholder:text-stone-500 text-stone-700 bg-stone-300 p-2 outline-none focus:bg-stone-200 w-full max-w-20"
+          />
+        </div>
+      </div>
+      <div class="flex gap-5">
+        <div>
+          <input type="checkbox" id="check-toggle">
+        </div>
+        <div id="diagnostics" class="text-sm font-mono"></div>
+      </div>
     </div>
   </body>
 </html>
