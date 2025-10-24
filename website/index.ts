@@ -4,7 +4,6 @@ import { parseSourceToTokens } from "../src/parse";
 
 // MOSTLY AI GENERATED SLOP DO NOT TOUCH
 
-/* ---------- minimal DOM helpers ---------- */
 const $ = <T extends Element>(s: string): T | null => document.querySelector(s);
 const $txt = (t: string): Text => document.createTextNode(t);
 const $c = (
@@ -18,16 +17,14 @@ const $c = (
   return el;
 };
 
-/* ---------- state ---------- */
 let code = "";
 let lastGoodTokens: any[] = [];
 
-/* ---------- HTML escaping ---------- */
 function escapeHTML(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/* ---------- syntax highlighting ---------- */
+// Syntax highlighting
 const tokenRE =
   /\/\/.*$|"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\b-?\d+\b|\b[A-Za-z_][A-Za-z0-9_]*\b|[(){}\[\]:,.+\-*/<>=%;]|\s+/gm;
 const keywords = new Set([
@@ -109,7 +106,6 @@ function highlightCode(src: string): string {
   return out.replace(/\n/g, "<br/>");
 }
 
-/* ---------- line numbers ---------- */
 function updateLineNumbers(): void {
   const numbers = $("#numbers")!;
   numbers.innerHTML = "";
@@ -122,7 +118,6 @@ function updateLineNumbers(): void {
   );
 }
 
-/* ---------- diagnostics ---------- */
 function showDiagnostics(errors: string[], warnings: string[]): void {
   const diag = $("#diagnostics")!;
   diag.innerHTML = "";
@@ -165,7 +160,6 @@ function showDiagnostics(errors: string[], warnings: string[]): void {
   ($("#run") as HTMLButtonElement).disabled = errors.length > 0;
 }
 
-/* ---------- live parse check ---------- */
 function validateSource(): void {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -174,14 +168,14 @@ function validateSource(): void {
     const toks = parseSourceToTokens(code);
     lastGoodTokens = toks;
 
-    // warn if "abstract unsafe" appears
+    // warn if "abstract unsafe" appears (DOESN'T FUCKING WORK)
     if (/abstract\s+unsafe/.test(code)) {
       warnings.push(
         `⚠️ "abstract unsafe" usage is discouraged and may be unsafe.`
       );
     }
 
-    // warn if unsafe block uses normal tokens
+    // warn if unsafe block uses normal tokens (DOESN'T FUCKING WORK)
     const unsafeBlocks = code.matchAll(/unsafe\s*{([^}]*)}/gs);
     for (const block of unsafeBlocks) {
       const inner = block[1] ?? ""; // ✅ ensure string, never undefined
@@ -198,7 +192,6 @@ function validateSource(): void {
   showDiagnostics(errors, warnings);
 }
 
-/* ---------- textarea sync & highlighting ---------- */
 function syncHighlight(): void {
   const ta = $("textarea") as HTMLTextAreaElement;
   code = ta.value;
@@ -207,7 +200,6 @@ function syncHighlight(): void {
   validateSource();
 }
 
-/* ---------- auto-indent (only inside {}) ---------- */
 function indentLevel(line: string): number {
   let lvl = 0;
   for (const ch of line) {
@@ -217,7 +209,49 @@ function indentLevel(line: string): number {
   return Math.max(0, lvl);
 }
 
-/* ---------- variable completion ---------- */
+function format(ta: HTMLTextAreaElement) {
+  const chars = code.split("\n").map((line) => Array.from(line));
+
+  // remove leading spaces
+  for (const [lineIndex, line] of chars.entries()) {
+    for (const [index, char] of line.entries()) {
+      if (char === " " && chars[lineIndex]) {
+        chars[lineIndex][index] = "";
+      }
+      if (char !== " ") break;
+    }
+  }
+
+  let level = 0; // indentation depth
+
+  for (const [lineIndex, line] of chars.entries()) {
+    const joined = line.join("").trim();
+
+    // decrease level if line starts with a closing brace
+    if (
+      joined.startsWith("}") ||
+      joined.startsWith("]") ||
+      joined.startsWith(")")
+    ) {
+      level = Math.max(level - 1, 0);
+    }
+
+    // rebuild line with indentation
+    const indent = "  ".repeat(level); // use 2 spaces per level
+    chars[lineIndex] = Array.from(indent + joined);
+
+    // increase level if line ends with an opening brace
+    if (joined.endsWith("{") || joined.endsWith("[") || joined.endsWith("(")) {
+      level++;
+    }
+  }
+
+  code = chars.map((line) => line.join("")).join("\n");
+  ta.value = code;
+  syncHighlight();
+  showAC();
+}
+
 const varsForAC = new Set<string>();
 const kw = new Set([
   "define",
@@ -376,6 +410,9 @@ loop counter {
     syncHighlight();
     showAC();
   });
+  ($("#format") as HTMLButtonElement).addEventListener("click", () =>
+    format(ta)
+  );
 
   /* initial draw */
   syncHighlight();
