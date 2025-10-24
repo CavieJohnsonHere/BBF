@@ -4,7 +4,7 @@ A compiler that compiles to Brainfuck.
 
 ## Language
 
-This language has 15 keywords:
+This language has 7 keywords:
 
 |  keyword | Usage                                  | Explanation                                                                                                          |
 | -------: | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -19,6 +19,14 @@ This language has 15 keywords:
 "Value" can be a variable or a number or "max" (the maximum value of a cell).
 
 You can visit [the website](https://caviejohnsonhere.github.io/BBF/) for a playground (it also has auto complete!).
+
+## CLI
+
+The cli has three commands:
+
+- bbf compile <input.bbf> <output.bf>
+- bbf execute <input.bf> <input-string> [--bits=8] [--input-number=false]
+- bbf run <input.bbf> <input-string> [--bits=8] [--input-number=false]
 
 ### Example code
 

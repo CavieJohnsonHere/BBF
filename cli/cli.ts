@@ -4,9 +4,9 @@ import { parseSourceToTokens } from "../src/parse";
 
 function printUsage() {
   console.log(`Usage:
-  bun run cli.ts compile <input.bbf> <output.bf>
-  bun run cli.ts execute <input.bf> <input-string> [--bits=8] [--input-number=false]
-  bun run cli.ts run <input.bbf> <input-string> [--bits=8] [--input-number=false]
+  bbf compile <input.bbf> <output.bf>
+  bbf execute <input.bf> <input-string> [--bits=8] [--input-number=false]
+  bbf run <input.bbf> <input-string> [--bits=8] [--input-number=false]
 `);
 }
 
