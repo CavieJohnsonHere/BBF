@@ -326,7 +326,6 @@ function showAC(): void {
 function run(): void {
   try {
     const input = ($("#input") as HTMLInputElement).value;
-    const checkToggle = ($("#check-toggle") as HTMLInputElement).checked;
     const compiled = compile(lastGoodTokens);
     const bits = ($("#bits") as HTMLInputElement).value;
     const useNumberInputs = ($("#number-based") as HTMLInputElement).checked;
@@ -345,6 +344,7 @@ function run(): void {
 
 /* ---------- main ---------- */
 function main(): void {
+  const checkToggle = ($("#check-toggle") as HTMLInputElement).checked;
   const ta = $("textarea") as HTMLTextAreaElement;
 
   /* highlight on input */
@@ -409,15 +409,15 @@ loop counter {
 }`;
     code = exampleCode;
     ta.value = exampleCode;
-    syncHighlight();
+    syncHighlight(checkToggle);
     showAC();
   });
   ($("#format") as HTMLButtonElement).addEventListener("click", () =>
-    format(ta, checkToggle);
+    format(ta, checkToggle)
   );
 
   /* initial draw */
-  syncHighlight();
+  syncHighlight(checkToggle);
 }
 
 document.addEventListener("DOMContentLoaded", main);
