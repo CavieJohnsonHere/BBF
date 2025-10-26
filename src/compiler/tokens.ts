@@ -5,7 +5,7 @@ export type LiteralToken = {
   tokenType: "Literal";
   value: number;
 };
-export type VariableToken = { tokenType: "Variable"; name: string };
+export type VariableToken = { tokenType: "Variable"; name: [string, number] };
 export type MathToken = {
   tokenType: "Math";
   operator: "+" | "-" | "*" | "/";
@@ -18,6 +18,7 @@ export type ValueToken = LiteralToken | VariableToken | MathToken | MaxToken;
 export type DeclarationToken = {
   tokenType: "Declaration";
   name: string;
+  array?: number;
   type: PrimitiveType;
 };
 export type IfToken = {
@@ -27,7 +28,7 @@ export type IfToken = {
 };
 export type AssignToken = {
   tokenType: "Assign";
-  variable: string;
+  variable: [string, number];
   value: ValueToken;
 };
 export type ShowToken = { tokenType: "Show"; value: ValueToken };

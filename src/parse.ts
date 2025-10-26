@@ -7,6 +7,8 @@ import type {
   PrimitiveType,
 } from "./compiler/tokens";
 
+/* ---------------------- Lexer ---------------------- */
+
 type TokNumber = { kind: "number"; text: string };
 type TokIdent = { kind: "ident"; text: string };
 type TokSymbol = { kind: "symbol"; text: string };
@@ -113,39 +115,48 @@ function parseFactor(state: State): [ValueToken, State] {
     return [{ tokenType: "Literal", value: num }, advance(state, 1)];
   }
 
-  // variable or 'max' keyword
+  // variable or max
   if (t.kind === "ident") {
     const text = t.text;
 
-    // Check for the 'max' keyword
     if (text === "max") {
       return [{ tokenType: "Max" }, advance(state, 1)];
     }
 
-    // Otherwise, it's a variable
-    return [{ tokenType: "Variable", name: text }, advance(state, 1)];
-  }
+    // Variable or array access
+    let s2 = advance(state, 1);
+    let index = 0;
 
-  // parenthesized expression
-  if (t.kind === "symbol" && t.text === "(") {
-    let s = advance(state, 1); // consume '('
-
-    // optional "math" keyword
-    const maybeMath = peek(s);
-    if (maybeMath.kind === "ident" && maybeMath.text === "math") {
-      s = advance(s, 1); // consume 'math'
+    const next = peek(s2);
+    if (next.kind === "symbol" && next.text === "[") {
+      s2 = advance(s2, 1);
+      const numTok = peek(s2);
+      if (numTok.kind !== "number") {
+        throw new Error("Expected number literal inside array index");
+      }
+      index = Number(numTok.text);
+      s2 = advance(s2, 1);
+      s2 = expectSymbol(s2, "]");
     }
 
-    // parse inner expression normally
-    const [expr, s2] = parseExpression(s);
+    return [{ tokenType: "Variable", name: [text, index] }, s2];
+  }
 
+  // (expr)
+  if (t.kind === "symbol" && t.text === "(") {
+    let s = advance(state, 1);
+    const maybeMath = peek(s);
+    if (maybeMath.kind === "ident" && maybeMath.text === "math") {
+      s = advance(s, 1);
+    }
+
+    const [expr, s2] = parseExpression(s);
     const closing = peek(s2);
     if (!(closing.kind === "symbol" && closing.text === ")")) {
       throw new Error(
         `Expected ')' after expression, got ${JSON.stringify(closing)}`
       );
     }
-
     return [expr, advance(s2, 1)];
   }
 
@@ -194,7 +205,7 @@ function parseExpression(state: State): [ValueToken, State] {
   return [node, s];
 }
 
-/* ---------------------- Safe Statements ---------------------- */
+/* ---------------------- Statements ---------------------- */
 
 function parseBlock(
   state: State,
@@ -229,6 +240,14 @@ function parseStatement(state: State): [Token, State] {
     const [name, s1] = expectIdentText(s);
     s = s1;
     let type: PrimitiveType = "number";
+    let array: number | undefined;
+
+    const maybeArray = peek(s);
+    if (maybeArray.kind === "number") {
+      array = Number(maybeArray.text);
+      s = advance(s);
+    }
+
     const nxt = peek(s);
     if (
       nxt.kind === "ident" &&
@@ -237,13 +256,28 @@ function parseStatement(state: State): [Token, State] {
       type = nxt.text as PrimitiveType;
       s = advance(s);
     }
-    return [{ tokenType: "Declaration", name, type }, s];
+
+    return [{ tokenType: "Declaration", name, type, array }, s];
   }
 
   if (kw === "set") {
-    const [variable, s1] = expectIdentText(s);
-    const [value, s2] = parseExpression(s1);
-    return [{ tokenType: "Assign", variable, value }, s2];
+    const [name, s1] = expectIdentText(s);
+    let s2 = s1;
+    let arrayIndex = 0;
+
+    const next = peek(s2);
+    if (next.kind === "symbol" && next.text === "[") {
+      s2 = advance(s2, 1);
+      const idxTok = peek(s2);
+      if (idxTok.kind !== "number")
+        throw new Error("Expected array index number");
+      arrayIndex = Number(idxTok.text);
+      s2 = advance(s2, 1);
+      s2 = expectSymbol(s2, "]");
+    }
+
+    const [value, s3] = parseExpression(s2);
+    return [{ tokenType: "Assign", variable: [name, arrayIndex], value }, s3];
   }
 
   if (kw === "show") {
@@ -269,15 +303,14 @@ function parseStatement(state: State): [Token, State] {
   }
 
   if (kw === "unsafe") {
-    // unsafe <size> { ... }
     const sizeTok = peek(s);
     if (sizeTok.kind !== "number")
       throw new Error("Expected size after unsafe");
-    const safteySize = Number(sizeTok.text);
+    const safetySize = Number(sizeTok.text);
     s = advance(s);
     const [body, s2] = parseBlock(s, true);
     return [
-      { tokenType: "Unsafe", safteySize, body: body as UnsafeToken[] },
+      { tokenType: "Unsafe", safetySize, body: body as UnsafeToken[] },
       s2,
     ];
   }
@@ -285,7 +318,7 @@ function parseStatement(state: State): [Token, State] {
   throw new Error(`Unknown statement '${kw}'`);
 }
 
-/* ---------------------- Unsafe Statements ---------------------- */
+/* ---------------------- Unsafe ---------------------- */
 
 function parseUnsafeStatement(state: State): [UnsafeToken, State] {
   const t = peek(state);
@@ -323,11 +356,7 @@ function parseUnsafeStatement(state: State): [UnsafeToken, State] {
     }
 
     case "abstract": {
-      console.warn(
-        "[Warning] Using abstract unsafe code — this bypasses safety checks!"
-      );
       const bfOps: (">" | "<" | "+" | "-" | "," | "." | "[" | "]")[] = [];
-      // Collect all symbols until 'end'
       while (true) {
         const p = peek(s);
         if (p.kind === "ident" && p.text === "end") {
@@ -362,6 +391,5 @@ export function parseSourceToTokens(source: string): Token[] {
     tokens.push(stmt);
     state = s2;
   }
-
   return tokens;
 }

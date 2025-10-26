@@ -14,7 +14,7 @@ let brainfuckCode = "";
 // "undefined" is used for cells storing a temporary value.
 let memoryUsage = new Map<
   number,
-  { variable: string; type: PrimitiveType } | null | undefined
+  { variable: [string, number]; type: PrimitiveType } | null | undefined
 >();
 let pointerLocation = 0;
 
@@ -43,7 +43,7 @@ function movePointerLeft() {
  *
  * @returns {number} The index of an available memory cell.
  */
-function findEmptyLocation() {
+function findEmptyLocation(): number {
   let lastOccupiedIndex = -1;
 
   for (let [locationIndex, details] of memoryUsage.entries()) {
@@ -169,15 +169,12 @@ function add(a: number, b: number): number {
   moveTo(copiedB);
   brainfuckCode += "-";
   brainfuckCode += "]";
-
   moveTo(copiedA);
   clearCell();
   memoryUsage.set(copiedA, null);
-
   moveTo(copiedB);
   clearCell();
   memoryUsage.set(copiedB, null);
-
   return targetLocation;
 }
 
@@ -234,6 +231,14 @@ function subtract(a: number, b: number): number {
   return targetLocation;
 }
 
+function findVariableLocation(name: string, index = 0): number | undefined {
+  return Array.from(memoryUsage.entries()).find(([loc, details]) => {
+    if (!details) return false;
+    const [n, i] = details.variable;
+    return n === name && i === index;
+  })?.[0];
+}
+
 /**
  * Evaluates a complex value token and returns the
  * memory location of the result.
@@ -261,9 +266,7 @@ function evalValue(val: ValueToken): number {
     setValue(val.value);
     return loc;
   } else if (val.tokenType === "Variable") {
-    const src = Array.from(memoryUsage.entries()).find(
-      ([, d]) => d?.variable === val.name
-    )?.[0];
+    const src = findVariableLocation(val.name[0], val.name[1]);
     if (src == undefined) throw new Error(`Variable ${val.name} not declared`);
     return src;
   } else if (val.tokenType === "Math") {
@@ -292,19 +295,6 @@ function evalValue(val: ValueToken): number {
 
 /**
  * Compiles tokens within an "unsafe" block.
- *
- * This function operates on a pre-allocated "safe"
- * memory region, tracked by `unsafePointerLocation`.
- * It translates `Unsafe...` tokens directly into
- * Brainfuck operations relative to this pointer,
- * providing raw memory access without the main
- * compiler's memory management overhead.
- *
- * Assumes `unsafePointerLocation` has been set by the
- * main `compile` function.
- *
- * @param {UnsafeToken[]} tokens - The list of unsafe
- * tokens to compile.
  */
 function compileUnsafe(tokens: UnsafeToken[]) {
   tokens.forEach((token) => {
@@ -382,16 +372,6 @@ function compileUnsafe(tokens: UnsafeToken[]) {
 
 /**
  * Finds a contiguous block of free memory.
- *
- * This is used by "unsafe" blocks to reserve a
- * dedicated memory region. It scans the `memoryUsage`
- * map to find a starting index `n` such that all
- * cells from `n` to `n + size - 1` are currently unused.
- *
- * @param {number} size - The required number of
- * contiguous free cells.
- * @returns {number} The starting index of the found
- * contiguous block.
  */
 function findContiguousFreeRegion(size: number): number {
   const used = new Set<number>();
@@ -413,21 +393,6 @@ function findContiguousFreeRegion(size: number): number {
 
 /**
  * The main compilation function.
- *
- * This function iterates through a list of high-level
- * tokens and translates them into a single Brainfuck
- * program string. It manages the abstract memory map
- * (`memoryUsage`), tracks the pointer location, and
- * orchestrates all helper functions (like `evalValue`,
- * `moveTo`, `copy`, etc.) to generate the final code.
- *
- * @param {Token[]} code - An array of abstract tokens
- * representing the program to compile.
- * @param {boolean} [reset=true] - If true (the default),
- * this will reset the global compiler state (code,
- * memory, pointers). This should be `false` for
- * recursive calls, such as compiling the body of a loop.
- * @returns {string} The final, compiled Brainfuck code.
  */
 export function compile(code: Token[], reset: boolean = true) {
   if (reset) {
@@ -439,17 +404,25 @@ export function compile(code: Token[], reset: boolean = true) {
 
   code.forEach((token) => {
     if (token.tokenType === "Declaration") {
-      const locationIndex = findEmptyLocation();
-      memoryUsage.set(locationIndex, {
-        variable: token.name,
-        type: token.type,
-      });
+      if (typeof token.array === "number") {
+        for (let i = 0; i < token.array; i++) {
+          const loc = findEmptyLocation();
+          memoryUsage.set(loc, {
+            variable: [token.name, i],
+            type: token.type,
+          });
+        }
+      } else {
+        const locationIndex = findEmptyLocation();
+        memoryUsage.set(locationIndex, {
+          variable: [token.name, 0],
+          type: token.type,
+        });
+      }
     } else if (token.tokenType === "Assign") {
-      const entry = Array.from(memoryUsage.entries()).find(
-        ([, details]) => details?.variable === token.variable
-      );
-      if (!entry) throw new Error(`Variable ${token.variable} not declared`);
-      const targetLocation = entry[0];
+      const entryLoc = findVariableLocation(token.variable[0], token.variable[1]);
+      if (entryLoc === undefined) throw new Error(`Variable ${token.variable} not declared`);
+      const targetLocation = entryLoc;
 
       if (token.value.tokenType === "Literal") {
         moveTo(targetLocation);
@@ -458,13 +431,9 @@ export function compile(code: Token[], reset: boolean = true) {
         moveTo(targetLocation);
         clearCell();
 
-        const sourceName = token.value.name;
-        const sourceLocation = Array.from(memoryUsage.entries()).find(
-          ([, details]) => details?.variable === sourceName
-        )?.[0];
-
+        const sourceLocation = findVariableLocation(token.value.name[0], token.value.name[1]);
         if (sourceLocation == undefined)
-          throw new Error(`Variable ${sourceName} not declared`);
+          throw new Error(`Variable ${token.value.name} not declared`);
 
         moveTo(sourceLocation);
         const copyLocation = copy(sourceLocation);
@@ -508,9 +477,7 @@ export function compile(code: Token[], reset: boolean = true) {
     } else if (token.tokenType === "Loop") {
       const condCell =
         token.condition.tokenType === "Variable"
-          ? Array.from(memoryUsage.entries()).find(
-              ([, d]) => d?.variable === token.condition.name
-            )?.[0]
+          ? findVariableLocation(token.condition.name[0], token.condition.name[1])
           : evalValue(token.condition);
 
       if (condCell == undefined) throw new Error("woopsies");
@@ -521,19 +488,14 @@ export function compile(code: Token[], reset: boolean = true) {
       moveTo(condCell);
       brainfuckCode += "]";
     } else if (token.tokenType === "Input") {
-      const entry = Array.from(memoryUsage.entries()).find(
-        ([, details]) => details?.variable === token.variable
-      );
-      if (!entry) throw new Error(`Variable ${token.variable} not declared`);
-      const targetLocation = entry[0];
-      moveTo(targetLocation);
+      const entryLoc = findVariableLocation(token.variable[0], token.variable[1]);
+      if (!entryLoc) throw new Error(`Variable ${token.variable} not declared`);
+      moveTo(entryLoc);
       brainfuckCode += ",";
     } else if (token.tokenType === "If") {
       const condCell =
         token.condition.tokenType === "Variable"
-          ? Array.from(memoryUsage.entries()).find(
-              ([, d]) => d?.variable === token.condition.name
-            )?.[0]
+          ? findVariableLocation(token.condition.name[0], token.condition.name[1])
           : evalValue(token.condition);
       if (condCell == undefined) throw new Error("woopsies");
 
@@ -544,10 +506,7 @@ export function compile(code: Token[], reset: boolean = true) {
       clearCell();
       brainfuckCode += "]";
     } else if (token.tokenType === "Unsafe") {
-      // Find a contiguous block that’s completely free
       const start = findContiguousFreeRegion(token.safetySize);
-
-      // Reserve region
       for (let i = 0; i < token.safetySize; i++) {
         memoryUsage.set(start + i, null);
       }
@@ -556,7 +515,6 @@ export function compile(code: Token[], reset: boolean = true) {
       moveTo(unsafePointerLocation);
       compileUnsafe(token.body);
 
-      // Free region
       for (let i = 0; i < token.safetySize; i++) {
         memoryUsage.delete(start + i);
         moveTo(start + i);
