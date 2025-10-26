@@ -122,16 +122,6 @@ function showDiagnostics(errors: string[], warnings: string[]): void {
   const diag = $("#diagnostics")!;
   diag.innerHTML = "";
 
-  if (!errors.length && !warnings.length) {
-    diag.appendChild(
-      $c("div", [$txt("No issues detected.")], {
-        class: "text-green-300",
-      })
-    );
-    ($("#run") as HTMLButtonElement).disabled = false;
-    return;
-  }
-
   if (errors.length) {
     const header = $c("div", [$txt("Errors:")], {
       class: "text-red-500 font-bold mt-2",
@@ -161,6 +151,7 @@ function showDiagnostics(errors: string[], warnings: string[]): void {
 }
 
 function validateSource(): void {
+  console.log("hi")
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -323,10 +314,13 @@ function showAC(): void {
 }
 
 /* ---------- run ---------- */
-function run(): void {
+function run(checkToggle: boolean): void {
   try {
     const input = ($("#input") as HTMLInputElement).value;
-    const compiled = compile(lastGoodTokens);
+    const tokensToCompile = checkToggle
+      ? lastGoodTokens
+      : parseSourceToTokens(code);
+    const compiled = compile(tokensToCompile);
     const bits = ($("#bits") as HTMLInputElement).value;
     const useNumberInputs = ($("#number-based") as HTMLInputElement).checked;
     ($("#output") as HTMLDivElement).innerText = brainfuck(compiled, {
@@ -384,7 +378,9 @@ function main(): void {
   });
 
   /* run button */
-  ($("#run") as HTMLButtonElement).addEventListener("click", run);
+  ($("#run") as HTMLButtonElement).addEventListener("click", () =>
+    run(checkToggle)
+  );
   ($("#example") as HTMLButtonElement).addEventListener("click", () => {
     const exampleCode = `define a number
 define b number
