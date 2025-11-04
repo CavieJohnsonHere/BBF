@@ -5,6 +5,9 @@
   "module": "src/index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "start": "bun ./website/index.html"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
