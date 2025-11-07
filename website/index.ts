@@ -382,26 +382,26 @@ function main(): void {
   );
   ($("#example") as HTMLButtonElement).addEventListener("click", () => {
     const exampleCode = `define a number
-  define b number
-  define temp number
-  define counter number
-  define SPACE char
+define b number
+define temp number
+define counter number
+define SPACE char
 
-  set a 1
-  set b 1
-  set counter max
-  set SPACE 32
+set a 1
+set b 1
+set counter max
+set SPACE 32
 
+show a
+
+loop counter {
+  show SPACE
   show a
-
-  loop counter {
-    show SPACE
-    show a
-    set temp a
-    set b temp
-    set a (math a + b)
-    set counter (math counter - 1)
-  }`;
+  set temp a
+  set b temp
+  set a (math a + b)
+  set counter (math counter - 1)
+}`;
     code = exampleCode;
     ta.value = exampleCode;
     syncHighlight(checkToggle);
