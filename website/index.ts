@@ -110,7 +110,7 @@ function downloadFile(content: string, fileName: string, contentType: string) {
   const blob = new Blob([content], { type: contentType });
   const url = URL.createObjectURL(blob);
 
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
   a.download = fileName;
   document.body.appendChild(a);
@@ -268,11 +268,15 @@ const kw = new Set([
   "char",
   "unsafe",
 ]);
+const t = new Set(["number", "char"]);
 
 function collectIdentifiers(): void {
   varsForAC.clear();
   for (const m of code.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g)) {
     const id = m[1];
+    if (id == undefined) {
+      return;
+    }
     if (!kw.has(id)) varsForAC.add(id);
   }
 }
@@ -295,18 +299,42 @@ function showAC(): void {
     return;
   }
   const prefix = m[1];
-  const hits = [...varsForAC, ...keywords]
-    .filter((v) => v.startsWith(prefix) && v !== prefix)
+  const hits = [
+    ...Array.from(varsForAC).map((v) => {
+      return { v, type: "var" };
+    }),
+    ...Array.from(keywords).map((v) => {
+      return { v, type: "kw" };
+    }),
+    ...Array.from(types).map((v) => {
+      return { v, type: "t" };
+    }),
+  ]
+    .filter((v) => v.v.startsWith(prefix || "") && v.v !== prefix)
     .sort();
   if (!hits.length) {
     acBox.classList.add("hidden");
     return;
   }
   acBox.innerHTML = "";
-  hits.forEach((v) => {
-    const item = $c("div", [$txt(v)], {
-      class: "px-3 py-1 hover:bg-stone-600 cursor-pointer",
-    });
+  hits.forEach(({ v, type }) => {
+    const item = $c(
+      "div",
+      [
+        $txt(v),
+        $c("div", [$txt(type)], {
+          class: `ml-auto opacity-30 ${
+            { var: "text-purple-300", kw: "text-green-300", t: "text-red-300" }[
+              type
+            ]
+          }`,
+        }),
+      ],
+      {
+        class:
+          "px-3 py-1 hover:bg-stone-600 cursor-pointer flex gap-10 shadow-lg",
+      }
+    );
     item.onclick = () => {
       ta.setRangeText(
         v.slice((prefix ?? "").length),
