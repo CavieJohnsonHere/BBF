@@ -37,6 +37,15 @@ export type LoopToken = {
   condition: ValueToken;
   body: Token[];
 };
+export type FunctionToken = {
+  tokenType: "Function";
+  name: string;
+  body: Token[];
+};
+export type CallToken = {
+  tokenType: "Call";
+  name: string;
+};
 export type InputToken = {
   tokenType: "Input";
   variable: string;
@@ -56,7 +65,9 @@ export type Token =
   | LoopToken
   | IfToken
   | InputToken
-  | Unsafe;
+  | Unsafe
+  | FunctionToken
+  | CallToken;
 
 // Unsafe Tokens
 export type GotoToken = {

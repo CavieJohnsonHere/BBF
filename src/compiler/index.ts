@@ -18,6 +18,10 @@ let memoryUsage = new Map<
 >();
 let pointerLocation = 0;
 
+// Functions, oh yes! Here's where we put the code that they run.
+// The key is the function name.
+let functions = new Map<string, Token[]>();
+
 // Since unsafe code blocks use their own custom memory block to provide safeguards against unwanted corruption
 let unsafePointerLocation: number | null = null;
 
@@ -420,8 +424,12 @@ export function compile(code: Token[], reset: boolean = true) {
         });
       }
     } else if (token.tokenType === "Assign") {
-      const entryLoc = findVariableLocation(token.variable[0], token.variable[1]);
-      if (entryLoc === undefined) throw new Error(`Variable ${token.variable} not declared`);
+      const entryLoc = findVariableLocation(
+        token.variable[0],
+        token.variable[1]
+      );
+      if (entryLoc === undefined)
+        throw new Error(`Variable ${token.variable} not declared`);
       const targetLocation = entryLoc;
 
       if (token.value.tokenType === "Literal") {
@@ -431,7 +439,10 @@ export function compile(code: Token[], reset: boolean = true) {
         moveTo(targetLocation);
         clearCell();
 
-        const sourceLocation = findVariableLocation(token.value.name[0], token.value.name[1]);
+        const sourceLocation = findVariableLocation(
+          token.value.name[0],
+          token.value.name[1]
+        );
         if (sourceLocation == undefined)
           throw new Error(`Variable ${token.value.name} not declared`);
 
@@ -477,7 +488,10 @@ export function compile(code: Token[], reset: boolean = true) {
     } else if (token.tokenType === "Loop") {
       const condCell =
         token.condition.tokenType === "Variable"
-          ? findVariableLocation(token.condition.name[0], token.condition.name[1])
+          ? findVariableLocation(
+              token.condition.name[0],
+              token.condition.name[1]
+            )
           : evalValue(token.condition);
 
       if (condCell == undefined) throw new Error("woopsies");
@@ -488,14 +502,20 @@ export function compile(code: Token[], reset: boolean = true) {
       moveTo(condCell);
       brainfuckCode += "]";
     } else if (token.tokenType === "Input") {
-      const entryLoc = findVariableLocation(token.variable[0], token.variable[1]);
+      const entryLoc = findVariableLocation(
+        token.variable[0],
+        token.variable[1]
+      );
       if (!entryLoc) throw new Error(`Variable ${token.variable} not declared`);
       moveTo(entryLoc);
       brainfuckCode += ",";
     } else if (token.tokenType === "If") {
       const condCell =
         token.condition.tokenType === "Variable"
-          ? findVariableLocation(token.condition.name[0], token.condition.name[1])
+          ? findVariableLocation(
+              token.condition.name[0],
+              token.condition.name[1]
+            )
           : evalValue(token.condition);
       if (condCell == undefined) throw new Error("woopsies");
 
@@ -522,6 +542,12 @@ export function compile(code: Token[], reset: boolean = true) {
       }
 
       unsafePointerLocation = null;
+    } else if (token.tokenType === "Function") {
+      functions.set(token.name, token.body);
+    } else if (token.tokenType === "Call") {
+      const funcCode = functions.get(token.name);
+      if (!funcCode) throw new Error(`Function ${token.name} not defined`);
+      brainfuckCode += compile(funcCode);
     } else {
       throw new Error(`Unhandled token type ${(token as any).tokenType}`);
     }
