@@ -103,7 +103,11 @@ export function brainfuck(
 
   if (dumpCore) {
     operations[dumpCore] = (mem, dp, ip) => {
-      console.log(memory);
+      let ignoreAndAfter = 0;
+      memory.forEach((cell, index) => {
+        if (cell == 0) ignoreAndAfter = index
+      })
+      console.log(memory.filter((_, index) => index >= ignoreAndAfter - 16));
       return [dp, ip + 1];
     };
   }

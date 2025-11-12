@@ -291,11 +291,13 @@ function run(checkToggle: boolean): void {
     const tokensToCompile = checkToggle ? lastGoodTokens : parseSourceToTokens(code);
     const compiled = compile(tokensToCompile);
     const bits = ($("#bits") as HTMLInputElement).value;
+    const dumpCore = ($("#dump-core") as HTMLInputElement).checked;
     const useNumberInputs = ($("#number-based") as HTMLInputElement).checked;
-    ($("#output") as HTMLDivElement).innerText = brainfuck(compiled, {
+    ($("#output") as HTMLDivElement).innerText = brainfuck(dumpCore ? Array.from(compiled).map(v => v + "&").join("") : compiled, {
       input,
       useNumberInputs,
       bits: parseInt(bits),
+      dumpCore: dumpCore ? "&" : undefined
     });
     ($("#brainfuck") as HTMLDivElement).innerText = compiled;
   } catch (err: any) {
@@ -308,7 +310,8 @@ function main(): void {
   const checkToggle = ($("#check-toggle") as HTMLInputElement).checked;
   const ta = $("textarea") as HTMLTextAreaElement;
 
-  ta.addEventListener("input", () => {
+  ta.addEventListener("input", e => {
+    if (ta.value === code) return;
     syncHighlight(checkToggle);
     showAC();
   });
