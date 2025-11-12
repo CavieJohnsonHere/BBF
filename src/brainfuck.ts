@@ -107,7 +107,7 @@ export function brainfuck(
       memory.forEach((cell, index) => {
         if (cell == 0) ignoreAndAfter = index
       })
-      console.log(memory.filter((_, index) => index >= ignoreAndAfter - 16));
+      console.log(memory.filter((_, index) => index <= ignoreAndAfter + 16));
       return [dp, ip + 1];
     };
   }
