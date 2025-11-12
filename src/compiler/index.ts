@@ -20,7 +20,14 @@ let pointerLocation = 0;
 
 // Functions, oh yes! Here's where we put the code that they run.
 // The key is the function name.
-let functions = new Map<string, Token[]>();
+// We wanna use the disallowed "&" character for our builtin function so typescript WILL scream and shout and try to kill you
+//@ts-ignore
+let functions = new Map<string, Token[]>([
+  [
+    "__dump",
+    [{ tokenType: "Unsafe", safetySize: 1, body: [{ tokenType: "Abstract", bf: "&" }] }],
+  ],
+]);
 
 // Since unsafe code blocks use their own custom memory block to provide safeguards against unwanted corruption
 let unsafePointerLocation: number | null = null;
@@ -409,14 +416,20 @@ export function compile(code: Token[], reset: boolean = true) {
   code.forEach((token) => {
     if (token.tokenType === "Declaration") {
       if (typeof token.array === "number") {
+        // MODIFICATION: Use findContiguousFreeRegion
+        const baseAddress = findContiguousFreeRegion(token.array);
         for (let i = 0; i < token.array; i++) {
-          const loc = findEmptyLocation();
+          const loc = baseAddress + i; // <-- Elements are now contiguous
           memoryUsage.set(loc, {
             variable: [token.name, i],
             type: token.type,
           });
+          // Optional but good: initialize the cell to 0
+          moveTo(loc);
+          clearCell();
         }
       } else {
+        // This part for single variables is fine
         const locationIndex = findEmptyLocation();
         memoryUsage.set(locationIndex, {
           variable: [token.name, 0],
@@ -548,6 +561,16 @@ export function compile(code: Token[], reset: boolean = true) {
       const funcCode = functions.get(token.name);
       if (!funcCode) throw new Error(`Function ${token.name} not defined`);
       brainfuckCode += compile(funcCode);
+    } else if (token.tokenType === "Remove") {
+      memoryUsage.forEach((details, loc) => {
+        if (details?.variable[0] === token.variable) memoryUsage.set(loc, null) 
+      })
+      // const varLoc = findVariableLocation(token.variable);
+      // if (varLoc == undefined)
+      //   throw new Error(`Variable ${token.variable} not declared`);
+      // moveTo(varLoc);
+      // clearCell();
+      // memoryUsage.set(varLoc, null);
     } else {
       throw new Error(`Unhandled token type ${(token as any).tokenType}`);
     }

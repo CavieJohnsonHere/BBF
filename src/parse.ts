@@ -260,6 +260,11 @@ function parseStatement(state: State): [Token, State] {
     return [{ tokenType: "Input", variable }, s1];
   }
 
+  if (kw === "remove") {
+    const [variable, s1] = expectIdentText(s);
+    return [{ tokenType: "Remove", variable }, s1];
+  }
+
   if (kw === "if") {
     const [cond, s1] = parseExpression(s);
     const [body, s2] = parseBlock(s1);

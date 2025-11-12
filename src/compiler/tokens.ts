@@ -58,6 +58,10 @@ export type Unsafe = {
   safetySize: number;
   body: UnsafeToken[];
 };
+export type Remove = {
+  tokenType: "Remove";
+  variable: string;
+};
 export type Token =
   | DeclarationToken
   | AssignToken
@@ -67,7 +71,8 @@ export type Token =
   | InputToken
   | Unsafe
   | FunctionToken
-  | CallToken;
+  | CallToken
+  | Remove;
 
 // Unsafe Tokens
 export type GotoToken = {

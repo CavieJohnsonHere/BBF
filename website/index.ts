@@ -293,7 +293,7 @@ function run(checkToggle: boolean): void {
     const bits = ($("#bits") as HTMLInputElement).value;
     const dumpCore = ($("#dump-core") as HTMLInputElement).checked;
     const useNumberInputs = ($("#number-based") as HTMLInputElement).checked;
-    ($("#output") as HTMLDivElement).innerText = brainfuck(dumpCore ? Array.from(compiled).map(v => v + "&").join("") : compiled, {
+    ($("#output") as HTMLDivElement).innerText = brainfuck(compiled, {
       input,
       useNumberInputs,
       bits: parseInt(bits),
