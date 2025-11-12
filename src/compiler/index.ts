@@ -561,16 +561,6 @@ export function compile(code: Token[], reset: boolean = true) {
       const funcCode = functions.get(token.name);
       if (!funcCode) throw new Error(`Function ${token.name} not defined`);
       brainfuckCode += compile(funcCode);
-    } else if (token.tokenType === "Remove") {
-      memoryUsage.forEach((details, loc) => {
-        if (details?.variable[0] === token.variable) memoryUsage.set(loc, null) 
-      })
-      // const varLoc = findVariableLocation(token.variable);
-      // if (varLoc == undefined)
-      //   throw new Error(`Variable ${token.variable} not declared`);
-      // moveTo(varLoc);
-      // clearCell();
-      // memoryUsage.set(varLoc, null);
     } else {
       throw new Error(`Unhandled token type ${(token as any).tokenType}`);
     }
