@@ -1,6 +1,6 @@
 import { brainfuck } from "../src/brainfuck";
 import { compile } from "../src/compiler";
-import { parseSourceToTokens } from "../src/parse";
+import { parseSourceToTokens } from "../src/parser/parse";
 
 function printUsage() {
   console.log(`Usage:

@@ -1,103 +1,116 @@
-// parser.ts  (complete, updated)
-
 import type {
   ValueToken,
   Token,
   UnsafeToken,
   PrimitiveType,
-} from "./compiler/tokens";
+} from "../compiler/tokens";
+import type { State, Tok, TokNumber } from "./toks";
 
-/* ------------------------------------------------------------------ */
-/*  Lexer                                                             */
-/* ------------------------------------------------------------------ */
+function isAlpha(ch: string) {
+  return /[A-Za-z_]/.test(ch);
+}
+function isAlphaNum(ch: string) {
+  return /[A-Za-z0-9_]/.test(ch);
+}
+function isDigit(ch: string) {
+  return /[0-9]/.test(ch);
+}
 
-type TokNumber = { kind: "number"; text: string };
-type TokIdent = { kind: "ident"; text: string };
-type TokSymbol = { kind: "symbol"; text: string };
-type TokEof = { kind: "eof" };
-type Tok = TokNumber | TokIdent | TokSymbol | TokEof;
-
-function isAlpha(ch: string) { return /[A-Za-z_]/.test(ch); }
-function isAlphaNum(ch: string) { return /[A-Za-z0-9_]/.test(ch); }
-function isDigit(ch: string) { return /[0-9]/.test(ch); }
-
+/**
+ * The main lexer function that converts a string input into an array of toks.
+ */
 function lex(input: string): Tok[] {
-  const out: Tok[] = [];
+  const outputToks: Tok[] = [];
   let i = 0;
-  const n = input.length;
 
-  while (i < n) {
-    const ch = input[i];
-    if (ch == undefined) throw new Error("woops");
+  while (i < input.length) {
+    const character = input[i];
+    if (character == undefined)
+      throw new Error(
+        `Something went wrong, expected character ${i}, but it doesn't exist!`
+      );
 
-    if (/\s/.test(ch)) { i++; continue; }
-
-    // comment //
-    if (ch === "/" && input[i + 1] === "/") {
-      i += 2;
-      while (i < n && input[i] !== "\n") i++;
-      continue;
-    }
-
-    if (isAlpha(ch)) {
-      let j = i + 1;
-      while (j < n && isAlphaNum(input[j])) j++;
-      out.push({ kind: "ident", text: input.slice(i, j) });
-      i = j;
-      continue;
-    }
-
-    if (isDigit(ch) || (ch === "-" && isDigit(input[i + 1] ?? ""))) {
-      let j = i;
-      if (input[j] === "-") j++;
-      while (j < n && isDigit(input[j])) j++;
-      out.push({ kind: "number", text: input.slice(i, j) });
-      i = j;
-      continue;
-    }
-
-    const two = input.slice(i, i + 2);
-    if (["==", "!=", "<=", ">="].includes(two)) {
-      out.push({ kind: "symbol", text: two });
-      i += 2;
-      continue;
-    }
-
-    if ("(){}+-*/:,<>[]$".includes(ch)) { // $ added
-      out.push({ kind: "symbol", text: ch });
+    if (/\s/.test(character)) {
       i++;
       continue;
     }
 
-    throw new Error(`Unexpected char '${ch}' at ${i}`);
+    // comment '//'
+    // Skip comment lines
+    if (character === "/" && input[i + 1] === "/") {
+      i += 2;
+      while (i < input.length && input[i] !== "\n") i++;
+      continue;
+    }
+
+    // comment '/* */'
+    // Skip comment segments
+    if (character === "/" && input[i + 1] === "*") {
+      i += 2;
+      while (i < input.length && input[i] !== "*" && input[i + 1] !== "/") i++;
+      i += 2; // Skip the closing '*/'
+      continue;
+    }
+
+    if (isAlpha(character)) {
+      let j = i + 1;
+      if (input[j] === undefined) continue;
+      while (j < input.length && isAlphaNum(input[j])) j++;
+      outputToks.push({ kind: "ident", text: input.slice(i, j) });
+      i = j;
+      continue;
+    }
+
+    if (
+      isDigit(character) ||
+      (character === "-" && isDigit(input[i + 1] ?? ""))
+    ) {
+      let j = i;
+      if (input[j] === "-") j++;
+      while (j < input.length && isDigit(input[j])) j++;
+      outputToks.push({ kind: "number", text: input.slice(i, j) });
+      i = j;
+      continue;
+    }
+
+    if (["==", "!=", "<=", ">="].includes(input.slice(i, i + 2))) {
+      outputToks.push({ kind: "symbol", text: input.slice(i, i + 2) });
+      i += 2;
+      continue;
+    }
+
+    if ("(){}+-*/:,<>[]$".includes(character)) {
+      outputToks.push({ kind: "symbol", text: character });
+      i++;
+      continue;
+    }
+
+    throw new Error(`Unexpected char '${character}' at ${i}`);
   }
 
-  out.push({ kind: "eof" });
-  return out;
+  outputToks.push({ kind: "eof" });
+  return outputToks;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Parser core                                                       */
-/* ------------------------------------------------------------------ */
+function peek(state: State): Tok {
+  return state.toks[state.idx] || { kind: "eof" };
+}
 
-type State = { toks: Tok[]; idx: number };
+function advance(state: State, by = 1): State {
+  return { toks: state.toks, idx: state.idx + by };
+}
 
-function peek(state: State): Tok { return state.toks[state.idx]; }
-function advance(state: State, by = 1): State { return { toks: state.toks, idx: state.idx + by }; }
 function expectSymbol(state: State, sym: string): State {
   const t = peek(state);
   if (t.kind === "symbol" && t.text === sym) return advance(state, 1);
   throw new Error(`Expected '${sym}', got ${JSON.stringify(t)}`);
 }
+
 function expectIdentText(state: State): [string, State] {
   const t = peek(state);
   if (t.kind === "ident") return [t.text, advance(state, 1)];
   throw new Error(`Expected identifier, got ${JSON.stringify(t)}`);
 }
-
-/* ------------------------------------------------------------------ */
-/*  Expressions                                                       */
-/* ------------------------------------------------------------------ */
 
 function parseFactor(state: State): [ValueToken, State] {
   const t = peek(state);
@@ -117,7 +130,8 @@ function parseFactor(state: State): [ValueToken, State] {
     if (next.kind === "symbol" && next.text === "[") {
       s2 = advance(s2, 1);
       const numTok = peek(s2);
-      if (numTok.kind !== "number") throw new Error("Expected number literal inside array index");
+      if (numTok.kind !== "number")
+        throw new Error("Expected number literal inside array index");
       index = Number(numTok.text);
       s2 = advance(s2, 1);
       s2 = expectSymbol(s2, "]");
@@ -128,11 +142,14 @@ function parseFactor(state: State): [ValueToken, State] {
   if (t.kind === "symbol" && t.text === "(") {
     let s = advance(state, 1);
     const maybeMath = peek(s);
-    if (maybeMath.kind === "ident" && maybeMath.text === "math") s = advance(s, 1);
+    if (maybeMath.kind === "ident" && maybeMath.text === "math")
+      s = advance(s, 1);
     const [expr, s2] = parseExpression(s);
     const closing = peek(s2);
     if (!(closing.kind === "symbol" && closing.text === ")")) {
-      throw new Error(`Expected ')' after expression, got ${JSON.stringify(closing)}`);
+      throw new Error(
+        `Expected ')' after expression, got ${JSON.stringify(closing)}`
+      );
     }
     return [expr, advance(s2, 1)];
   }
@@ -146,7 +163,12 @@ function parseTerm(state: State): [ValueToken, State] {
     if (t.kind === "symbol" && (t.text === "*" || t.text === "/")) {
       s = advance(s);
       const [rhs, s2] = parseFactor(s);
-      node = { tokenType: "Math", operator: t.text as "*" | "/", left: node, right: rhs };
+      node = {
+        tokenType: "Math",
+        operator: t.text as "*" | "/",
+        left: node,
+        right: rhs,
+      };
       s = s2;
       continue;
     }
@@ -162,7 +184,12 @@ function parseExpression(state: State): [ValueToken, State] {
     if (t.kind === "symbol" && (t.text === "+" || t.text === "-")) {
       s = advance(s);
       const [rhs, s2] = parseTerm(s);
-      node = { tokenType: "Math", operator: t.text as "+" | "-", left: node, right: rhs };
+      node = {
+        tokenType: "Math",
+        operator: t.text as "+" | "-",
+        left: node,
+        right: rhs,
+      };
       s = s2;
       continue;
     }
@@ -171,11 +198,10 @@ function parseExpression(state: State): [ValueToken, State] {
   return [node, s];
 }
 
-/* ------------------------------------------------------------------ */
-/*  Statements                                                        */
-/* ------------------------------------------------------------------ */
-
-function parseBlock(state: State, unsafe = false): [Token[] | UnsafeToken[], State] {
+function parseBlock(
+  state: State,
+  unsafe = false
+): [Token[] | UnsafeToken[], State] {
   let s = expectSymbol(state, "{");
   const body: (Token | UnsafeToken)[] = [];
   while (true) {
@@ -197,15 +223,18 @@ function parseBlock(state: State, unsafe = false): [Token[] | UnsafeToken[], Sta
 function parseStatement(state: State): [Token, State] {
   const t = peek(state);
 
-  // ---- function call: $name ----------------------------------------
+  // function call
   if (t.kind === "symbol" && t.text === "$") {
     let s = advance(state, 1);
     const [name, s2] = expectIdentText(s);
     return [{ tokenType: "Call", name }, s2];
   }
 
-  // ---- everything else must start with an identifier ---------------
-  if (t.kind !== "ident") throw new Error(`Expected keyword or function call, got ${JSON.stringify(t)}`);
+  // everything else must start with an identifier
+  if (t.kind !== "ident")
+    throw new Error(
+      `Expected keyword or function call, got ${JSON.stringify(t)}`
+    );
   const kw = t.text;
   let s = advance(state);
 
@@ -226,7 +255,10 @@ function parseStatement(state: State): [Token, State] {
       s = advance(s);
     }
     const nxt = peek(s);
-    if (nxt.kind === "ident" && (nxt.text === "char" || nxt.text === "number")) {
+    if (
+      nxt.kind === "ident" &&
+      (nxt.text === "char" || nxt.text === "number")
+    ) {
       type = nxt.text as PrimitiveType;
       s = advance(s);
     }
@@ -241,7 +273,8 @@ function parseStatement(state: State): [Token, State] {
     if (next.kind === "symbol" && next.text === "[") {
       s2 = advance(s2, 1);
       const idxTok = peek(s2);
-      if (idxTok.kind !== "number") throw new Error("Expected array index number");
+      if (idxTok.kind !== "number")
+        throw new Error("Expected array index number");
       arrayIndex = Number(idxTok.text);
       s2 = advance(s2, 1);
       s2 = expectSymbol(s2, "]");
@@ -279,11 +312,15 @@ function parseStatement(state: State): [Token, State] {
 
   if (kw === "unsafe") {
     const sizeTok = peek(s);
-    if (sizeTok.kind !== "number") throw new Error("Expected size after unsafe");
+    if (sizeTok.kind !== "number")
+      throw new Error("Expected size after unsafe");
     const safetySize = Number(sizeTok.text);
     s = advance(s);
     const [body, s2] = parseBlock(s, true);
-    return [{ tokenType: "Unsafe", safetySize, body: body as UnsafeToken[] }, s2];
+    return [
+      { tokenType: "Unsafe", safetySize, body: body as UnsafeToken[] },
+      s2,
+    ];
   }
 
   throw new Error(`Unknown statement '${kw}'`);
@@ -295,14 +332,16 @@ function parseStatement(state: State): [Token, State] {
 
 function parseUnsafeStatement(state: State): [UnsafeToken, State] {
   const t = peek(state);
-  if (t.kind !== "ident") throw new Error(`Expected unsafe op, got ${JSON.stringify(t)}`);
+  if (t.kind !== "ident")
+    throw new Error(`Expected unsafe op, got ${JSON.stringify(t)}`);
   const kw = t.text;
   let s = advance(state);
 
   switch (kw) {
     case "goto": {
       const numTok = peek(s);
-      if (numTok.kind !== "number") throw new Error("Expected number after goto");
+      if (numTok.kind !== "number")
+        throw new Error("Expected number after goto");
       const loc = Number(numTok.text);
       return [{ tokenType: "UnsafeGoto", loc }, advance(s)];
     }
@@ -325,13 +364,18 @@ function parseUnsafeStatement(state: State): [UnsafeToken, State] {
       const bfOps: (">" | "<" | "+" | "-" | "," | "." | "[" | "]")[] = [];
       while (true) {
         const p = peek(s);
-        if (p.kind === "ident" && p.text === "end") { s = advance(s); break; }
+        if (p.kind === "ident" && p.text === "end") {
+          s = advance(s);
+          break;
+        }
         if (p.kind === "symbol" && "><+-.,[]".includes(p.text)) {
           bfOps.push(p.text as any);
           s = advance(s);
           continue;
         }
-        throw new Error(`Invalid character inside abstract block: ${JSON.stringify(p)}`);
+        throw new Error(
+          `Invalid character inside abstract block: ${JSON.stringify(p)}`
+        );
       }
       return [{ tokenType: "Abstract", bf: bfOps }, s];
     }

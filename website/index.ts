@@ -1,7 +1,7 @@
 // website.ts  (replace the old file with this)
 import { compile } from "../src/compiler";
 import { brainfuck } from "../src/brainfuck";
-import { parseSourceToTokens } from "../src/parse";
+import { parseSourceToTokens } from "../src/parser/parse";
 
 /* ----------  tiny helpers  ---------------------------------------- */
 const $ = <T extends Element>(s: string): T | null => document.querySelector(s);
