@@ -23,10 +23,7 @@ let lastGoodTokens: any[] = [];
 
 /* ----------  html escaper  ---------------------------------------- */
 function escapeHTML(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /* ----------  syntax highlighting  --------------------------------- */
@@ -149,10 +146,14 @@ function showDiagnostics(errors: string[], warnings: string[]): void {
   }
   if (warnings.length) {
     diag.appendChild(
-      $c("div", [$txt("Warnings:")], { class: "text-yellow-500 font-bold mt-2" })
+      $c("div", [$txt("Warnings:")], {
+        class: "text-yellow-500 font-bold mt-2",
+      })
     );
     warnings.forEach((w) =>
-      diag.appendChild($c("div", [$txt("• " + w)], { class: "text-yellow-400 text-sm" }))
+      diag.appendChild(
+        $c("div", [$txt("• " + w)], { class: "text-yellow-400 text-sm" })
+      )
     );
   }
   ($("#run") as HTMLButtonElement).disabled = errors.length > 0;
@@ -167,7 +168,9 @@ function validateSource(): void {
     lastGoodTokens = toks;
 
     if (/abstract\s+unsafe/.test(code))
-      warnings.push(`⚠️ "abstract unsafe" usage is discouraged and may be unsafe.`);
+      warnings.push(
+        `⚠️ "abstract unsafe" usage is discouraged and may be unsafe.`
+      );
 
     for (const m of code.matchAll(/unsafe\s*{([^}]*)}/gs)) {
       const inner = m[1] ?? "";
@@ -203,7 +206,8 @@ function format(ta: HTMLTextAreaElement, checkToggle: boolean) {
   const lines = code.split("\n").map((l) => l.trimStart());
   let level = 0;
   const formatted = lines.map((l) => {
-    if (l.startsWith("}") || l.startsWith("]") || l.startsWith(")")) level = Math.max(level - 1, 0);
+    if (l.startsWith("}") || l.startsWith("]") || l.startsWith(")"))
+      level = Math.max(level - 1, 0);
     const out = "  ".repeat(level) + l;
     if (l.endsWith("{") || l.endsWith("[") || l.endsWith("(")) level++;
     return out;
@@ -265,11 +269,18 @@ function showAC(): void {
         $txt(v),
         $c("div", [$txt(type)], {
           class: `ml-auto opacity-30 ${
-            { func: "text-yellow-300", var: "text-purple-300", kw: "text-green-300" }[type]
+            {
+              func: "text-yellow-300",
+              var: "text-purple-300",
+              kw: "text-green-300",
+            }[type]
           }`,
         }),
       ],
-      { class: "px-3 py-1 hover:bg-stone-600 cursor-pointer flex gap-10 shadow-lg" }
+      {
+        class:
+          "px-3 py-1 hover:bg-stone-600 cursor-pointer flex gap-10 shadow-lg",
+      }
     );
     item.onclick = () => {
       ta.setRangeText(v.slice(prefix.length), pos, pos, "end");
@@ -288,7 +299,9 @@ function showAC(): void {
 function run(checkToggle: boolean): void {
   try {
     const input = ($("#input") as HTMLInputElement).value;
-    const tokensToCompile = checkToggle ? lastGoodTokens : parseSourceToTokens(code);
+    const tokensToCompile = checkToggle
+      ? lastGoodTokens
+      : parseSourceToTokens(code);
     const compiled = compile(tokensToCompile);
     const bits = ($("#bits") as HTMLInputElement).value;
     const dumpCore = ($("#dump-core") as HTMLInputElement).checked;
@@ -297,11 +310,15 @@ function run(checkToggle: boolean): void {
       input,
       useNumberInputs,
       bits: parseInt(bits),
-      dumpCore: dumpCore ? "&" : undefined
+      dumpCore: dumpCore ? "&" : undefined,
     });
-    ($("#brainfuck") as HTMLDivElement).innerText = compiled;
+    ($("#brainfuck") as HTMLDivElement).innerHTML = Array.from(compiled)
+      .map((c) => `<span>${escapeHTML(c)}</span> `)
+      .join("");
   } catch (err: any) {
-    ($("#output") as HTMLDivElement).innerText = `❌ Runtime error: ${err.message}`;
+    (
+      $("#output") as HTMLDivElement
+    ).innerText = `❌ Runtime error: ${err.message}`;
   }
 }
 
@@ -310,7 +327,7 @@ function main(): void {
   const checkToggle = ($("#check-toggle") as HTMLInputElement).checked;
   const ta = $("textarea") as HTMLTextAreaElement;
 
-  ta.addEventListener("input", e => {
+  ta.addEventListener("input", (e) => {
     if (ta.value === code) return;
     syncHighlight(checkToggle);
     showAC();
@@ -322,10 +339,18 @@ function main(): void {
       const cur = ta.value.slice(0, ta.selectionStart).split("\n").pop()!;
       const base = cur.match(/^\s*/)?.[0]?.length ?? 0;
       const extra = indentLevel(cur) * 2;
-      ta.setRangeText("\n" + " ".repeat(base + extra), ta.selectionStart, ta.selectionEnd, "end");
+      ta.setRangeText(
+        "\n" + " ".repeat(base + extra),
+        ta.selectionStart,
+        ta.selectionEnd,
+        "end"
+      );
       ta.dispatchEvent(new Event("input"));
     }
-    if (!acBox.classList.contains("hidden") && (e.key === "Tab" || e.key === "Enter")) {
+    if (
+      !acBox.classList.contains("hidden") &&
+      (e.key === "Tab" || e.key === "Enter")
+    ) {
       e.preventDefault();
       (acBox.querySelector("div") as HTMLElement)?.click();
     }
@@ -336,7 +361,9 @@ function main(): void {
     if (!acBox.contains(e.target as Node)) acBox.classList.add("hidden");
   });
 
-  ($("#run") as HTMLButtonElement).addEventListener("click", () => run(checkToggle));
+  ($("#run") as HTMLButtonElement).addEventListener("click", () =>
+    run(checkToggle)
+  );
   ($("#example") as HTMLButtonElement).addEventListener("click", () => {
     const ex = `define a number
 define b number
@@ -364,7 +391,18 @@ loop counter {
     syncHighlight(checkToggle);
     showAC();
   });
-  ($("#format") as HTMLButtonElement).addEventListener("click", () => format(ta, checkToggle));
+  ($("#format") as HTMLButtonElement).addEventListener("click", () =>
+    format(ta, checkToggle)
+  );
+  ($("#compile") as HTMLButtonElement).addEventListener(
+    "click",
+    () =>
+      (($("#brainfuck") as HTMLDivElement).innerHTML = Array.from(
+        compile(checkToggle ? lastGoodTokens : parseSourceToTokens(code))
+      )
+        .map((c) => `<span>${escapeHTML(c)}</span> `)
+        .join(""))
+  );
   ($("#save") as HTMLButtonElement).addEventListener("click", () =>
     downloadFile(code, "source.bbf", "text/plain")
   );
