@@ -4,390 +4,356 @@ import type {
   UnsafeToken,
   PrimitiveType,
 } from "../compiler/tokens";
-import type { State, Tok, TokNumber } from "./toks";
 
-function isAlpha(ch: string) {
-  return /[A-Za-z_]/.test(ch);
+type NumberTok = { kind: "number"; text: string };
+type IdentTok = { kind: "ident"; text: string };
+type SymbolTok = { kind: "symbol"; text: string };
+type EofTok = { kind: "eof" };
+type Tok = NumberTok | IdentTok | SymbolTok | EofTok;
+
+function isAlpha(char: string) {
+  return /[A-Za-z_]/.test(char);
 }
-function isAlphaNum(ch: string) {
-  return /[A-Za-z0-9_]/.test(ch);
-}
-function isDigit(ch: string) {
-  return /[0-9]/.test(ch);
+
+function isAlphaNum(char: string) {
+  return /[A-Za-z0-9_]/.test(char);
 }
 
-/**
- * The main lexer function that converts a string input into an array of toks.
- */
-function lex(input: string): Tok[] {
-  const outputToks: Tok[] = [];
-  let i = 0;
+function isDigit(char: string) {
+  return /[0-9]/.test(char);
+}
 
-  while (i < input.length) {
-    const character = input[i];
-    if (character == undefined)
-      throw new Error(
-        `Something went wrong, expected character ${i}, but it doesn't exist!`
-      );
+function lexer(input: string): Tok[] {
+  const tokens: Tok[] = [];
+  let pos = 0;
+  const length = input.length;
 
-    if (/\s/.test(character)) {
-      i++;
+  while (pos < length) {
+    const char = input[pos];
+    if (char === undefined) throw new Error("Unexpected end of input");
+
+    if (/\s/.test(char)) {
+      pos++;
       continue;
     }
 
-    // comment '//'
-    // Skip comment lines
-    if (character === "/" && input[i + 1] === "/") {
-      i += 2;
-      while (i < input.length && input[i] !== "\n") i++;
+    // skip comment lines starting with //
+    if (char === "/" && input[pos + 1] === "/") {
+      pos += 2;
+      while (pos < length && input[pos] !== "\n") pos++;
       continue;
     }
 
-    // comment '/* */'
-    // Skip comment segments
-    if (character === "/" && input[i + 1] === "*") {
-      i += 2;
-      while (i < input.length && input[i] !== "*" && input[i + 1] !== "/") i++;
-      i += 2; // Skip the closing '*/'
+    if (isAlpha(char)) {
+      let end = pos + 1;
+      while (end < length && isAlphaNum(input[end])) end++;
+      tokens.push({ kind: "ident", text: input.slice(pos, end) });
+      pos = end;
       continue;
     }
 
-    if (isAlpha(character)) {
-      let j = i + 1;
-      if (input[j] === undefined) continue;
-      while (j < input.length && isAlphaNum(input[j])) j++;
-      outputToks.push({ kind: "ident", text: input.slice(i, j) });
-      i = j;
+    if (isDigit(char) || (char === "-" && isDigit(input[pos + 1] ?? ""))) {
+      let end = pos;
+      if (input[end] === "-") end++;
+      while (end < length && isDigit(input[end])) end++;
+      tokens.push({ kind: "number", text: input.slice(pos, end) });
+      pos = end;
       continue;
     }
 
-    if (
-      isDigit(character) ||
-      (character === "-" && isDigit(input[i + 1] ?? ""))
-    ) {
-      let j = i;
-      if (input[j] === "-") j++;
-      while (j < input.length && isDigit(input[j])) j++;
-      outputToks.push({ kind: "number", text: input.slice(i, j) });
-      i = j;
+    // two-character symbols
+    const twoCharSym = input.slice(pos, pos + 2);
+    if (["==", "!=", "<=", ">="].includes(twoCharSym)) {
+      tokens.push({ kind: "symbol", text: twoCharSym });
+      pos += 2;
       continue;
     }
 
-    if (["==", "!=", "<=", ">="].includes(input.slice(i, i + 2))) {
-      outputToks.push({ kind: "symbol", text: input.slice(i, i + 2) });
-      i += 2;
+    // single-character symbols including $
+    if ("(){}+-*/:,<>[]$".includes(char)) {
+      tokens.push({ kind: "symbol", text: char });
+      pos++;
       continue;
     }
 
-    if ("(){}+-*/:,<>[]$".includes(character)) {
-      outputToks.push({ kind: "symbol", text: character });
-      i++;
-      continue;
-    }
-
-    throw new Error(`Unexpected char '${character}' at ${i}`);
+    throw new Error(`Unexpected character '${char}' at ${pos}`);
   }
 
-  outputToks.push({ kind: "eof" });
-  return outputToks;
+  tokens.push({ kind: "eof" });
+  return tokens;
 }
 
-function peek(state: State): Tok {
-  return state.toks[state.idx] || { kind: "eof" };
+type ParserState = { tokens: Tok[]; position: number };
+
+function peek(state: ParserState): Tok {
+  return state.tokens[state.position];
 }
 
-function advance(state: State, by = 1): State {
-  return { toks: state.toks, idx: state.idx + by };
+function advance(state: ParserState, step = 1): ParserState {
+  return { tokens: state.tokens, position: state.position + step };
 }
 
-function expectSymbol(state: State, sym: string): State {
-  const t = peek(state);
-  if (t.kind === "symbol" && t.text === sym) return advance(state, 1);
-  throw new Error(`Expected '${sym}', got ${JSON.stringify(t)}`);
+function expectSymbol(state: ParserState, symbol: string): ParserState {
+  const current = peek(state);
+  if (current.kind === "symbol" && current.text === symbol) {
+    return advance(state);
+  }
+  throw new Error(`Expected symbol '${symbol}', found ${JSON.stringify(current)}`);
 }
 
-function expectIdentText(state: State): [string, State] {
-  const t = peek(state);
-  if (t.kind === "ident") return [t.text, advance(state, 1)];
-  throw new Error(`Expected identifier, got ${JSON.stringify(t)}`);
+function expectIdentifier(state: ParserState): [string, ParserState] {
+  const current = peek(state);
+  if (current.kind === "ident") {
+    return [current.text, advance(state)];
+  }
+  throw new Error(`Expected identifier, found ${JSON.stringify(current)}`);
 }
 
-function parseFactor(state: State): [ValueToken, State] {
-  const t = peek(state);
+function parseFactor(state: ParserState): [ValueToken, ParserState] {
+  const current = peek(state);
 
-  if (t.kind === "number") {
-    const num = Number((t as TokNumber).text);
-    return [{ tokenType: "Literal", value: num }, advance(state, 1)];
+  if (current.kind === "number") {
+    const num = Number((current as NumberTok).text);
+    return [{ tokenType: "Literal", value: num }, advance(state)];
   }
 
-  if (t.kind === "ident") {
-    const text = t.text;
-    if (text === "max") return [{ tokenType: "Max" }, advance(state, 1)];
+  if (current.kind === "ident") {
+    const name = current.text;
+    if (name === "max") return [{ tokenType: "Max" }, advance(state)];
 
-    let s2 = advance(state, 1);
+    let nextState = advance(state);
     let index = 0;
-    const next = peek(s2);
-    if (next.kind === "symbol" && next.text === "[") {
-      s2 = advance(s2, 1);
-      const numTok = peek(s2);
-      if (numTok.kind !== "number")
-        throw new Error("Expected number literal inside array index");
-      index = Number(numTok.text);
-      s2 = advance(s2, 1);
-      s2 = expectSymbol(s2, "]");
+    const nextToken = peek(nextState);
+    if (nextToken.kind === "symbol" && nextToken.text === "[") {
+      nextState = advance(nextState);
+      const indexToken = peek(nextState);
+      if (indexToken.kind !== "number") throw new Error("Expected number inside array index");
+      index = Number(indexToken.text);
+      nextState = advance(nextState);
+      nextState = expectSymbol(nextState, "]");
     }
-    return [{ tokenType: "Variable", name: [text, index] }, s2];
+    return [{ tokenType: "Variable", name: [name, index] }, nextState];
   }
 
-  if (t.kind === "symbol" && t.text === "(") {
-    let s = advance(state, 1);
-    const maybeMath = peek(s);
-    if (maybeMath.kind === "ident" && maybeMath.text === "math")
-      s = advance(s, 1);
-    const [expr, s2] = parseExpression(s);
-    const closing = peek(s2);
+  if (current.kind === "symbol" && current.text === "(") {
+    let nextState = advance(state);
+    const maybeMath = peek(nextState);
+    if (maybeMath.kind === "ident" && maybeMath.text === "math") {
+      nextState = advance(nextState);
+    }
+    const [expression, afterExprState] = parseExpression(nextState);
+    const closing = peek(afterExprState);
     if (!(closing.kind === "symbol" && closing.text === ")")) {
-      throw new Error(
-        `Expected ')' after expression, got ${JSON.stringify(closing)}`
-      );
+      throw new Error(`Expected ')' after expression, found ${JSON.stringify(closing)}`);
     }
-    return [expr, advance(s2, 1)];
+    return [expression, advance(afterExprState)];
   }
-  throw new Error(`Unexpected token in factor: ${JSON.stringify(t)}`);
+
+  throw new Error(`Unexpected token in factor: ${JSON.stringify(current)}`);
 }
 
-function parseTerm(state: State): [ValueToken, State] {
-  let [node, s] = parseFactor(state);
+function parseTerm(state: ParserState): [ValueToken, ParserState] {
+  let [leftNode, nextState] = parseFactor(state);
   while (true) {
-    const t = peek(s);
-    if (t.kind === "symbol" && (t.text === "*" || t.text === "/")) {
-      s = advance(s);
-      const [rhs, s2] = parseFactor(s);
-      node = {
-        tokenType: "Math",
-        operator: t.text as "*" | "/",
-        left: node,
-        right: rhs,
-      };
-      s = s2;
-      continue;
-    }
-    break;
-  }
-  return [node, s];
-}
-
-function parseExpression(state: State): [ValueToken, State] {
-  let [node, s] = parseTerm(state);
-  while (true) {
-    const t = peek(s);
-    if (t.kind === "symbol" && (t.text === "+" || t.text === "-")) {
-      s = advance(s);
-      const [rhs, s2] = parseTerm(s);
-      node = {
-        tokenType: "Math",
-        operator: t.text as "+" | "-",
-        left: node,
-        right: rhs,
-      };
-      s = s2;
-      continue;
-    }
-    break;
-  }
-  return [node, s];
-}
-
-function parseBlock(
-  state: State,
-  unsafe = false
-): [Token[] | UnsafeToken[], State] {
-  let s = expectSymbol(state, "{");
-  const body: (Token | UnsafeToken)[] = [];
-  while (true) {
-    const t = peek(s);
-    if (t.kind === "symbol" && t.text === "}") return [body as any, advance(s)];
-    if (t.kind === "eof") throw new Error("Unterminated block");
-    if (unsafe) {
-      const [u, s2] = parseUnsafeStatement(s);
-      body.push(u);
-      s = s2;
+    const current = peek(nextState);
+    if (current.kind === "symbol" && (current.text === "*" || current.text === "/")) {
+      nextState = advance(nextState);
+      const [rightNode, afterRight] = parseFactor(nextState);
+      leftNode = { tokenType: "Math", operator: current.text as "*" | "/", left: leftNode, right: rightNode };
+      nextState = afterRight;
     } else {
-      const [stmt, s2] = parseStatement(s);
-      body.push(stmt);
-      s = s2;
+      break;
+    }
+  }
+  return [leftNode, nextState];
+}
+
+function parseExpression(state: ParserState): [ValueToken, ParserState] {
+  let [leftNode, nextState] = parseTerm(state);
+  while (true) {
+    const current = peek(nextState);
+    if (current.kind === "symbol" && (current.text === "+" || current.text === "-")) {
+      nextState = advance(nextState);
+      const [rightNode, afterRight] = parseTerm(nextState);
+      leftNode = { tokenType: "Math", operator: current.text as "+" | "-", left: leftNode, right: rightNode };
+      nextState = afterRight;
+    } else {
+      break;
+    }
+  }
+  return [leftNode, nextState];
+}
+
+function parseBlock(state: ParserState, unsafe = false): [Token[] | UnsafeToken[], ParserState] {
+  let nextState = expectSymbol(state, "{");
+  const statements: (Token | UnsafeToken)[] = [];
+
+  while (true) {
+    const current = peek(nextState);
+    if (current.kind === "symbol" && current.text === "}") {
+      return [statements as any, advance(nextState)];
+    }
+    if (current.kind === "eof") throw new Error("Block not terminated with '}'");
+
+    if (unsafe) {
+      const [unsafeStmt, afterUnsafe] = parseUnsafeStatement(nextState);
+      statements.push(unsafeStmt);
+      nextState = afterUnsafe;
+    } else {
+      const [stmt, afterStmt] = parseStatement(nextState);
+      statements.push(stmt);
+      nextState = afterStmt;
     }
   }
 }
 
-function parseStatement(state: State): [Token, State] {
-  const t = peek(state);
+function parseStatement(state: ParserState): [Token, ParserState] {
+  const current = peek(state);
 
-  // function call
-  if (t.kind === "symbol" && t.text === "$") {
-    let s = advance(state, 1);
-    const [name, s2] = expectIdentText(s);
-    return [{ tokenType: "Call", name }, s2];
+  if (current.kind === "symbol" && current.text === "$") {
+    let nextState = advance(state);
+    const [funcName, afterName] = expectIdentifier(nextState);
+    return [{ tokenType: "Call", name: funcName }, afterName];
   }
 
-  // everything else must start with an identifier
-  if (t.kind !== "ident")
-    throw new Error(
-      `Expected keyword or function call, got ${JSON.stringify(t)}`
-    );
-  const kw = t.text;
-  let s = advance(state);
-
-  if (kw === "function") {
-    const [name, s1] = expectIdentText(s);
-    const [body, s2] = parseBlock(s1);
-    return [{ tokenType: "Function", name, body: body as Token[] }, s2];
-  }
-
-  if (kw === "define") {
-    const [name, s1] = expectIdentText(s);
-    s = s1;
-    let type: PrimitiveType = "number";
-    let array: number | undefined;
-    const maybeArray = peek(s);
-    if (maybeArray.kind === "number") {
-      array = Number(maybeArray.text);
-      s = advance(s);
-    }
-    const nxt = peek(s);
-    if (
-      nxt.kind === "ident" &&
-      (nxt.text === "char" || nxt.text === "number")
-    ) {
-      type = nxt.text as PrimitiveType;
-      s = advance(s);
-    }
-    return [{ tokenType: "Declaration", name, type, array }, s];
-  }
-
-  if (kw === "set") {
-    const [name, s1] = expectIdentText(s);
-    let s2 = s1;
-    let arrayIndex = 0;
-    const next = peek(s2);
-    if (next.kind === "symbol" && next.text === "[") {
-      s2 = advance(s2, 1);
-      const idxTok = peek(s2);
-      if (idxTok.kind !== "number")
-        throw new Error("Expected array index number");
-      arrayIndex = Number(idxTok.text);
-      s2 = advance(s2, 1);
-      s2 = expectSymbol(s2, "]");
-    }
-    const [value, s3] = parseExpression(s2);
-    return [{ tokenType: "Assign", variable: [name, arrayIndex], value }, s3];
-  }
-
-  if (kw === "show") {
-    const [value, s1] = parseExpression(s);
-    return [{ tokenType: "Show", value }, s1];
-  }
-
-  if (kw === "input") {
-    const [variable, s1] = expectIdentText(s);
-    return [{ tokenType: "Input", variable }, s1];
-  }
-
-  if (kw === "remove") {
-    const [variable, s1] = expectIdentText(s);
-    return [{ tokenType: "Remove", variable }, s1];
-  }
-
-  if (kw === "if") {
-    const [cond, s1] = parseExpression(s);
-    const [body, s2] = parseBlock(s1);
-    return [{ tokenType: "If", condition: cond, body: body as Token[] }, s2];
-  }
-
-  if (kw === "loop") {
-    const [cond, s1] = parseExpression(s);
-    const [body, s2] = parseBlock(s1);
-    return [{ tokenType: "Loop", condition: cond, body: body as Token[] }, s2];
-  }
-
-  if (kw === "unsafe") {
-    const sizeTok = peek(s);
-    if (sizeTok.kind !== "number")
-      throw new Error("Expected size after unsafe");
-    const safetySize = Number(sizeTok.text);
-    s = advance(s);
-    const [body, s2] = parseBlock(s, true);
-    return [
-      { tokenType: "Unsafe", safetySize, body: body as UnsafeToken[] },
-      s2,
-    ];
-  }
-
-  throw new Error(`Unknown statement '${kw}'`);
-}
-
-function parseUnsafeStatement(state: State): [UnsafeToken, State] {
-  const t = peek(state);
-  if (t.kind !== "ident")
-    throw new Error(`Expected unsafe op, got ${JSON.stringify(t)}`);
-  const keyword = t.text;
-  let s = advance(state);
+  if (current.kind !== "ident") throw new Error(`Expected keyword or function call, found ${JSON.stringify(current)}`);
+  const keyword = current.text;
+  let nextState = advance(state);
 
   switch (keyword) {
-    case "goto": {
-      const numTok = peek(s);
-      if (numTok.kind !== "number")
-        throw new Error("Expected number after goto");
-      const loc = Number(numTok.text);
-      return [{ tokenType: "UnsafeGoto", loc }, advance(s)];
+    case "function": {
+      const [funcName, afterName] = expectIdentifier(nextState);
+      const [body, afterBody] = parseBlock(afterName);
+      return [{ tokenType: "Function", name: funcName, body: body as Token[] }, afterBody];
     }
-    case "add": {
-      const [amt, s1] = parseExpression(s);
-      return [{ tokenType: "UnsafeAdd", amount: amt }, s1];
+    case "define": {
+      const [varName, afterName] = expectIdentifier(nextState);
+      let cursor = afterName;
+      let varType: PrimitiveType = "number";
+      let arrayLength: number | undefined;
+      const maybeArrayLen = peek(cursor);
+      if (maybeArrayLen.kind === "number") {
+        arrayLength = Number(maybeArrayLen.text);
+        cursor = advance(cursor);
+      }
+      const maybeType = peek(cursor);
+      if (maybeType.kind === "ident" && (maybeType.text === "char" || maybeType.text === "number")) {
+        varType = maybeType.text as PrimitiveType;
+        cursor = advance(cursor);
+      }
+      return [{ tokenType: "Declaration", name: varName, type: varType, array: arrayLength }, cursor];
     }
-    case "reduce": {
-      const [amt, s1] = parseExpression(s);
-      return [{ tokenType: "UnsafeReduce", amount: amt }, s1];
+    case "set": {
+      const [varName, afterName] = expectIdentifier(nextState);
+      let cursor = afterName;
+      let index = 0;
+      const nextTok = peek(cursor);
+      if (nextTok.kind === "symbol" && nextTok.text === "[") {
+        cursor = advance(cursor);
+        const idxTok = peek(cursor);
+        if (idxTok.kind !== "number") throw new Error("Expected number for array index");
+        index = Number(idxTok.text);
+        cursor = advance(cursor);
+        cursor = expectSymbol(cursor, "]");
+      }
+      const [value, afterValue] = parseExpression(cursor);
+      return [{ tokenType: "Assign", variable: [varName, index], value }, afterValue];
     }
     case "show": {
-      return [{ tokenType: "UnsafeShow" }, s];
+      const [expr, afterExpr] = parseExpression(nextState);
+      return [{ tokenType: "Show", value: expr }, afterExpr];
+    }
+    case "input": {
+      const [inputVar, afterVar] = expectIdentifier(nextState);
+      return [{ tokenType: "Input", variable: inputVar }, afterVar];
+    }
+    case "remove": {
+      const [removeVar, afterVar] = expectIdentifier(nextState);
+      return [{ tokenType: "Remove", variable: removeVar }, afterVar];
+    }
+    case "if": {
+      const [condExpr, afterCond] = parseExpression(nextState);
+      const [bodyBlock, afterBody] = parseBlock(afterCond);
+      return [{ tokenType: "If", condition: condExpr, body: bodyBlock as Token[] }, afterBody];
     }
     case "loop": {
-      const [body, s1] = parseBlock(s, true);
-      return [{ tokenType: "UnsafeLoop", body: body as UnsafeToken[] }, s1];
+      const [condExpr, afterCond] = parseExpression(nextState);
+      const [bodyBlock, afterBody] = parseBlock(afterCond);
+      return [{ tokenType: "Loop", condition: condExpr, body: bodyBlock as Token[] }, afterBody];
     }
-    case "abstract": {
-      const bfOps: (">" | "<" | "+" | "-" | "," | "." | "[" | "]")[] = [];
-      while (true) {
-        const p = peek(s);
-        if (p.kind === "ident" && p.text === "end") {
-          s = advance(s);
-          break;
-        }
-        if (p.kind === "symbol" && "><+-.,[]".includes(p.text)) {
-          bfOps.push(p.text as any);
-          s = advance(s);
-          continue;
-        }
-        throw new Error(
-          `Invalid character inside abstract block: ${JSON.stringify(p)}`
-        );
-      }
-      return [{ tokenType: "Abstract", bf: bfOps }, s];
+    case "unsafe": {
+      const sizeTok = peek(nextState);
+      if (sizeTok.kind !== "number") throw new Error("Unsafe block must specify size");
+      const size = Number(sizeTok.text);
+      nextState = advance(nextState);
+      const [unsafeBody, afterUnsafe] = parseBlock(nextState, true);
+      return [{ tokenType: "Unsafe", safetySize: size, body: unsafeBody as UnsafeToken[] }, afterUnsafe];
     }
     default:
-      throw new Error(`Unknown unsafe command '${keyword}'`);
+      throw new Error(`Unknown statement keyword '${keyword}'`);
+  }
+}
+
+function parseUnsafeStatement(state: ParserState): [UnsafeToken, ParserState] {
+  const current = peek(state);
+  if (current.kind !== "ident") throw new Error(`Expected unsafe operation, found ${JSON.stringify(current)}`);
+  const op = current.text;
+  let nextState = advance(state);
+
+  switch (op) {
+    case "goto": {
+      const locTok = peek(nextState);
+      if (locTok.kind !== "number") throw new Error("Expected number after goto");
+      const loc = Number(locTok.text);
+      return [{ tokenType: "UnsafeGoto", loc }, advance(nextState)];
+    }
+    case "add": {
+      const [amount, afterAmount] = parseExpression(nextState);
+      return [{ tokenType: "UnsafeAdd", amount }, afterAmount];
+    }
+    case "reduce": {
+      const [amount, afterAmount] = parseExpression(nextState);
+      return [{ tokenType: "UnsafeReduce", amount }, afterAmount];
+    }
+    case "show": {
+      return [{ tokenType: "UnsafeShow" }, nextState];
+    }
+    case "loop": {
+      const [body, afterBody] = parseBlock(nextState, true);
+      return [{ tokenType: "UnsafeLoop", body: body as UnsafeToken[] }, afterBody];
+    }
+    case "abstract": {
+      const operations: (">" | "<" | "+" | "-" | "," | "." | "[" | "]")[] = [];
+      while (true) {
+        const nextTok = peek(nextState);
+        if (nextTok.kind === "ident" && nextTok.text === "end") {
+          nextState = advance(nextState);
+          break;
+        }
+        if (nextTok.kind === "symbol" && "><+-.,[]".includes(nextTok.text)) {
+          operations.push(nextTok.text as any);
+          nextState = advance(nextState);
+          continue;
+        }
+        throw new Error(`Invalid character inside abstract block: ${JSON.stringify(nextTok)}`);
+      }
+      return [{ tokenType: "Abstract", bf: operations }, nextState];
+    }
+    default:
+      throw new Error(`Unknown unsafe command '${op}'`);
   }
 }
 
 export function parseSourceToTokens(source: string): Token[] {
-  const toks = lex(source);
-  let state: State = { toks, idx: 0 };
-  const tokens: Token[] = [];
+  const tokens = lexer(source);
+  let state: ParserState = { tokens, position: 0 };
+  const allTokens: Token[] = [];
+
   while (peek(state).kind !== "eof") {
-    const [stmt, s2] = parseStatement(state);
-    tokens.push(stmt);
-    state = s2;
+    const [stmt, nextState] = parseStatement(state);
+    allTokens.push(stmt);
+    state = nextState;
   }
-  return tokens;
+
+  return allTokens;
 }
