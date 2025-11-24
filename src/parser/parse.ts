@@ -326,18 +326,14 @@ function parseStatement(state: State): [Token, State] {
   throw new Error(`Unknown statement '${kw}'`);
 }
 
-/* ------------------------------------------------------------------ */
-/*  Unsafe statements                                                 */
-/* ------------------------------------------------------------------ */
-
 function parseUnsafeStatement(state: State): [UnsafeToken, State] {
   const t = peek(state);
   if (t.kind !== "ident")
     throw new Error(`Expected unsafe op, got ${JSON.stringify(t)}`);
-  const kw = t.text;
+  const keyword = t.text;
   let s = advance(state);
 
-  switch (kw) {
+  switch (keyword) {
     case "goto": {
       const numTok = peek(s);
       if (numTok.kind !== "number")
@@ -380,13 +376,9 @@ function parseUnsafeStatement(state: State): [UnsafeToken, State] {
       return [{ tokenType: "Abstract", bf: bfOps }, s];
     }
     default:
-      throw new Error(`Unknown unsafe command '${kw}'`);
+      throw new Error(`Unknown unsafe command '${keyword}'`);
   }
 }
-
-/* ------------------------------------------------------------------ */
-/*  Public API                                                        */
-/* ------------------------------------------------------------------ */
 
 export function parseSourceToTokens(source: string): Token[] {
   const toks = lex(source);
