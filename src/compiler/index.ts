@@ -16,6 +16,12 @@ let memoryUsage = new Map<
   number,
   { variable: [string, number]; type: PrimitiveType } | null | undefined
 >();
+
+// Keep track of variable base addresses and lengths for arrays
+let variables = new Map<
+  string,
+  { base: number; length: number; type: PrimitiveType }
+>();
 let pointerLocation = 0;
 
 // Functions, oh yes! Here's where we put the code that they run.
@@ -25,7 +31,13 @@ let pointerLocation = 0;
 let functions = new Map<string, Token[]>([
   [
     "__dump",
-    [{ tokenType: "Unsafe", safetySize: 1, body: [{ tokenType: "Abstract", bf: "&" }] }],
+    [
+      {
+        tokenType: "Unsafe",
+        safetySize: 1,
+        body: [{ tokenType: "Abstract", bf: "&" }],
+      },
+    ],
   ],
 ]);
 
@@ -250,6 +262,65 @@ function findVariableLocation(name: string, index = 0): number | undefined {
   })?.[0];
 }
 
+function suggestVariableName(name: string): string | null {
+  // Look for similar names in variables or memoryUsage
+  const candidates = new Set<string>();
+  for (const key of variables.keys()) candidates.add(key);
+  for (const val of memoryUsage.values()) {
+    if (val && val.variable) candidates.add(val.variable[0]);
+  }
+  let best: string | null = null;
+  let bestDist = Infinity;
+  for (const cand of candidates) {
+    const dist = levenshtein(name.toLowerCase(), cand.toLowerCase());
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = cand;
+    }
+  }
+  if (best && bestDist <= 2) return best;
+  return null;
+}
+
+function levenshtein(a: string, b: string): number {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const dp: number[][] = Array.from({ length: rows }, () =>
+    new Array(cols).fill(0)
+  );
+  for (let i = 0; i < rows; i++) dp[i]![0] = i;
+  for (let j = 0; j < cols; j++) dp[0]![j] = j;
+  for (let i = 1; i < rows; i++) {
+    const row = dp[i] as number[];
+    const prevRow = dp[i - 1] as number[];
+    for (let j = 1; j < cols; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const up = (prevRow[j] as number) + 1;
+      const left = (row[j - 1] as number) + 1;
+      const diag = (prevRow[j - 1] as number) + cost;
+      row[j] = Math.min(up, left, diag);
+    }
+  }
+  return dp[rows - 1]![cols - 1]!;
+}
+
+function variableNotFoundMessage(name: string) {
+  const suggestion = suggestVariableName(name);
+  if (suggestion)
+    return `Variable ${name} not declared. Did you mean '${suggestion}'?`;
+  return `Variable ${name} not declared`;
+}
+
+function findVariableBase(name: string): number | undefined {
+  const info = variables.get(name);
+  return info?.base;
+}
+
+function findVariableLength(name: string): number | undefined {
+  const info = variables.get(name);
+  return info?.length;
+}
+
 /**
  * Evaluates a complex value token and returns the
  * memory location of the result.
@@ -277,9 +348,15 @@ function evalValue(val: ValueToken): number {
     setValue(val.value);
     return loc;
   } else if (val.tokenType === "Variable") {
-    const src = findVariableLocation(val.name[0], val.name[1]);
-    if (src == undefined) throw new Error(`Variable ${val.name} not declared`);
-    return src;
+    const name = val.name[0];
+    const idx = val.name[1];
+    if (typeof idx === "number") {
+      const src = findVariableLocation(name, idx);
+      if (src == undefined) throw new Error(variableNotFoundMessage(name));
+      return src;
+    }
+    // dynamic index: evaluate value and return a copy of the resulting element
+    return getVariableValueAtDynamicIndex(name, idx);
   } else if (val.tokenType === "Math") {
     if (val.operator === "+") {
       const a = evalValue(val.left);
@@ -302,6 +379,233 @@ function evalValue(val: ValueToken): number {
     return loc;
   }
   throw new Error("Unknown value token");
+}
+
+/**
+ * Evaluates the value of a variable at a dynamic (runtime) index.
+ * Returns the location of a temporary cell containing the value.
+ */
+function getVariableValueAtDynamicIndex(name: string, indexExpr: any): number {
+  const info = variables.get(name);
+  if (!info) throw new Error(variableNotFoundMessage(name));
+  const base = info.base;
+  const len = info.length;
+
+  // Evaluate index expression
+  const idxCell = evalValue(indexExpr);
+
+  const resultLoc = findEmptyLocation();
+  memoryUsage.set(resultLoc, undefined);
+
+  // For each element in the array, we check if index equals i and then copy
+  for (let i = 0; i < len; i++) {
+    // comp = copy(idxCell)
+    const comp = copy(idxCell);
+    // flag = temp to indicate equality
+    const flag = findEmptyLocation();
+    memoryUsage.set(flag, undefined);
+    moveTo(flag);
+    setValue(1);
+
+    // While comp != 0, set flag to 0 and decrement comp
+    moveTo(comp);
+    brainfuckCode += "[";
+    moveTo(flag);
+    clearCell()
+    moveTo(comp);
+    brainfuckCode += "-";
+    brainfuckCode += "]";
+
+    // now if flag == 1 then comp was zero => idx == 0
+    // To check idx == i, subtract i from comp by repeating i times the decrement on a copy
+    if (i > 0) {
+      // decrement comp (we need a fresh comp)
+      // comp currently is 0 due to previous loop; reevaluate by copying idxCell again and subtracting i
+      const comp2 = copy(idxCell);
+      for (let k = 0; k < i; k++) {
+        moveTo(comp2);
+        brainfuckCode += "-";
+      }
+      // check if comp2 == 0 -> set a separate flag2
+      const flag2 = findEmptyLocation();
+      memoryUsage.set(flag2, undefined);
+      moveTo(flag2);
+      setValue(1);
+      moveTo(comp2);
+      brainfuckCode += "[";
+      moveTo(flag2);
+      brainfuckCode += "[-]";
+      moveTo(comp2);
+      brainfuckCode += "-";
+      brainfuckCode += "]";
+      // Now if flag2==1 the index equals i
+      // If flag2==1 copy base+i to result
+      moveTo(flag2);
+      brainfuckCode += "[";
+      const copyOfElem = copy(base + i);
+      moveTo(copyOfElem);
+      brainfuckCode += "[";
+      moveTo(resultLoc);
+      brainfuckCode += "+";
+      moveTo(copyOfElem);
+      brainfuckCode += "-";
+      brainfuckCode += "]";
+      // cleanup
+      moveTo(copyOfElem);
+      clearCell();
+      memoryUsage.set(copyOfElem, null);
+      moveTo(flag2);
+      clearCell();
+      memoryUsage.set(flag2, null);
+      // close flag2 loop
+      brainfuckCode += "]";
+      moveTo(comp2);
+      clearCell();
+      memoryUsage.set(comp2, null);
+    } else {
+      // i == 0
+      moveTo(flag);
+      brainfuckCode += "[";
+      const copyOfElem = copy(base + i);
+      moveTo(copyOfElem);
+      brainfuckCode += "[";
+      moveTo(resultLoc);
+      brainfuckCode += "+";
+      moveTo(copyOfElem);
+      brainfuckCode += "-";
+      brainfuckCode += "]";
+      moveTo(copyOfElem);
+      clearCell();
+      memoryUsage.set(copyOfElem, null);
+      moveTo(flag);
+      clearCell();
+      memoryUsage.set(flag, null);
+      // close flag loop
+      brainfuckCode += "]";
+    }
+
+    moveTo(comp);
+    clearCell();
+    memoryUsage.set(comp, null);
+  }
+
+  // return location of copied element (0 if none matched)
+  return resultLoc;
+}
+
+/**
+ * Sets the variable at a dynamic index to a given value token.
+ * This will locate the appropriate element at runtime and write to it.
+ */
+function setVariableAtDynamicIndex(
+  name: string,
+  indexExpr: any,
+  value: ValueToken
+) {
+  const info = variables.get(name);
+  if (!info) throw new Error(variableNotFoundMessage(name));
+  const base = info.base;
+  const len = info.length;
+
+  const idxCell = evalValue(indexExpr);
+  // idxCopy not needed
+  const valueCell = evalValue(value);
+
+  for (let i = 0; i < len; i++) {
+    // comp = copy(idxCell)
+    const comp = copy(idxCell);
+    // flag2 = new temp
+    const flag2 = findEmptyLocation();
+    memoryUsage.set(flag2, undefined);
+    moveTo(flag2);
+    setValue(1);
+    moveTo(comp);
+    brainfuckCode += "[";
+    moveTo(flag2);
+    brainfuckCode += "[-]";
+    moveTo(comp);
+    brainfuckCode += "-";
+    brainfuckCode += "]";
+
+    if (i > 0) {
+      const comp2 = copy(idxCell);
+      for (let k = 0; k < i; k++) {
+        moveTo(comp2);
+        brainfuckCode += "-";
+      }
+      // check comp2 == 0 -> flag3
+      const flag3 = findEmptyLocation();
+      memoryUsage.set(flag3, undefined);
+      moveTo(flag3);
+      setValue(1);
+      moveTo(comp2);
+      brainfuckCode += "[";
+      moveTo(flag3);
+      brainfuckCode += "[-]";
+      moveTo(comp2);
+      brainfuckCode += "-";
+      brainfuckCode += "]";
+
+      // if flag3 then write to base+i
+      moveTo(flag3);
+      brainfuckCode += "[";
+      const target = base + i;
+      moveTo(target);
+      clearCell();
+      const copyOfValue = copy(valueCell);
+      moveTo(copyOfValue);
+      brainfuckCode += "[";
+      moveTo(target);
+      brainfuckCode += "+";
+      moveTo(copyOfValue);
+      brainfuckCode += "-";
+      brainfuckCode += "]";
+      moveTo(copyOfValue);
+      clearCell();
+      memoryUsage.set(copyOfValue, null);
+      moveTo(flag3);
+      clearCell();
+      memoryUsage.set(flag3, null);
+      // close flag3 loop
+      brainfuckCode += "]";
+      moveTo(comp2);
+      clearCell();
+      memoryUsage.set(comp2, null);
+    } else {
+      moveTo(flag2);
+      brainfuckCode += "[";
+      const target = base + i;
+      moveTo(target);
+      clearCell();
+      const copyOfValue = copy(valueCell);
+      moveTo(copyOfValue);
+      brainfuckCode += "[";
+      moveTo(target);
+      brainfuckCode += "+";
+      moveTo(copyOfValue);
+      brainfuckCode += "-";
+      brainfuckCode += "]";
+      moveTo(copyOfValue);
+      clearCell();
+      memoryUsage.set(copyOfValue, null);
+      moveTo(flag2);
+      clearCell();
+      memoryUsage.set(flag2, null);
+      // close flag2 loop
+      brainfuckCode += "]";
+    }
+
+    moveTo(comp);
+    clearCell();
+    memoryUsage.set(comp, null);
+  }
+
+  // clear valueCell if it's a temporary
+  if (memoryUsage.get(valueCell) === undefined) {
+    moveTo(valueCell);
+    clearCell();
+    memoryUsage.set(valueCell, null);
+  }
 }
 
 /**
@@ -411,6 +715,7 @@ export function compile(code: Token[], reset: boolean = true) {
     memoryUsage = new Map();
     pointerLocation = 0;
     unsafePointerLocation = null;
+    variables = new Map();
   }
 
   code.forEach((token) => {
@@ -428,6 +733,11 @@ export function compile(code: Token[], reset: boolean = true) {
           moveTo(loc);
           clearCell();
         }
+        variables.set(token.name, {
+          base: baseAddress,
+          length: token.array,
+          type: token.type,
+        });
       } else {
         // This part for single variables is fine
         const locationIndex = findEmptyLocation();
@@ -435,14 +745,28 @@ export function compile(code: Token[], reset: boolean = true) {
           variable: [token.name, 0],
           type: token.type,
         });
+        variables.set(token.name, {
+          base: locationIndex,
+          length: 1,
+          type: token.type,
+        });
       }
     } else if (token.tokenType === "Assign") {
+      // support dynamic indexing on assignment
+      if (typeof token.variable[1] !== "number") {
+        setVariableAtDynamicIndex(
+          token.variable[0],
+          token.variable[1],
+          token.value
+        );
+        return;
+      }
       const entryLoc = findVariableLocation(
         token.variable[0],
         token.variable[1]
       );
       if (entryLoc === undefined)
-        throw new Error(`Variable ${token.variable} not declared`);
+        throw new Error(variableNotFoundMessage(token.variable[0] as string));
       const targetLocation = entryLoc;
 
       if (token.value.tokenType === "Literal") {
@@ -451,13 +775,14 @@ export function compile(code: Token[], reset: boolean = true) {
       } else if (token.value.tokenType === "Variable") {
         moveTo(targetLocation);
         clearCell();
-
-        const sourceLocation = findVariableLocation(
-          token.value.name[0],
-          token.value.name[1]
-        );
+        const sourceLocation =
+          typeof token.value.name[1] === "number"
+            ? findVariableLocation(token.value.name[0], token.value.name[1])
+            : evalValue(token.value);
         if (sourceLocation == undefined)
-          throw new Error(`Variable ${token.value.name} not declared`);
+          throw new Error(
+            variableNotFoundMessage(token.value.name[0] as string)
+          );
 
         moveTo(sourceLocation);
         const copyLocation = copy(sourceLocation);
@@ -488,8 +813,16 @@ export function compile(code: Token[], reset: boolean = true) {
       const valueLocation = evalValue(token.value);
       moveTo(valueLocation);
       switch (true) {
+        // if we are showing a variable and that variable is char-typed in its declaration
         case token.value.tokenType === "Variable" &&
-          memoryUsage.get(valueLocation)?.type === "char":
+          (typeof token.value.name[1] === "number"
+            ? memoryUsage.get(
+                findVariableLocation(
+                  token.value.name[0],
+                  token.value.name[1] as any
+                ) ?? -1
+              )?.type === "char"
+            : variables.get(token.value.name[0])?.type === "char"):
         case token.value.tokenType === "Literal" &&
           typeof token.value.value === "string":
           brainfuckCode += "~";
@@ -500,7 +833,8 @@ export function compile(code: Token[], reset: boolean = true) {
       }
     } else if (token.tokenType === "Loop") {
       const condCell =
-        token.condition.tokenType === "Variable"
+        token.condition.tokenType === "Variable" &&
+        typeof token.condition.name[1] === "number"
           ? findVariableLocation(
               token.condition.name[0],
               token.condition.name[1]
@@ -515,16 +849,15 @@ export function compile(code: Token[], reset: boolean = true) {
       moveTo(condCell);
       brainfuckCode += "]";
     } else if (token.tokenType === "Input") {
-      const entryLoc = findVariableLocation(
-        token.variable[0],
-        token.variable[1]
-      );
-      if (!entryLoc) throw new Error(`Variable ${token.variable} not declared`);
+      const name = token.variable as string;
+      const entryLoc = findVariableLocation(name, 0);
+      if (!entryLoc) throw new Error(variableNotFoundMessage(name));
       moveTo(entryLoc);
       brainfuckCode += ",";
     } else if (token.tokenType === "If") {
       const condCell =
-        token.condition.tokenType === "Variable"
+        token.condition.tokenType === "Variable" &&
+        typeof token.condition.name[1] === "number"
           ? findVariableLocation(
               token.condition.name[0],
               token.condition.name[1]
@@ -566,5 +899,6 @@ export function compile(code: Token[], reset: boolean = true) {
     }
   });
 
+  // debug removed
   return brainfuckCode;
 }

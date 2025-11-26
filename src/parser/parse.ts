@@ -46,7 +46,7 @@ function lexer(input: string): Tok[] {
 
     if (isAlpha(char)) {
       let end = pos + 1;
-      while (end < length && isAlphaNum(input[end])) end++;
+      while (end < length && isAlphaNum(input[end] ?? "")) end++;
       tokens.push({ kind: "ident", text: input.slice(pos, end) });
       pos = end;
       continue;
@@ -55,7 +55,7 @@ function lexer(input: string): Tok[] {
     if (isDigit(char) || (char === "-" && isDigit(input[pos + 1] ?? ""))) {
       let end = pos;
       if (input[end] === "-") end++;
-      while (end < length && isDigit(input[end])) end++;
+      while (end < length && isDigit(input[end] ?? "")) end++;
       tokens.push({ kind: "number", text: input.slice(pos, end) });
       pos = end;
       continue;
@@ -86,7 +86,7 @@ function lexer(input: string): Tok[] {
 type ParserState = { tokens: Tok[]; position: number };
 
 function peek(state: ParserState): Tok {
-  return state.tokens[state.position];
+  return state.tokens[state.position] as Tok;
 }
 
 function advance(state: ParserState, step = 1): ParserState {
@@ -126,13 +126,11 @@ function parseFactor(state: ParserState): [ValueToken, ParserState] {
     const nextToken = peek(nextState);
     if (nextToken.kind === "symbol" && nextToken.text === "[") {
       nextState = advance(nextState);
-      const indexToken = peek(nextState);
-      if (indexToken.kind !== "number") throw new Error("Expected number inside array index");
-      index = Number(indexToken.text);
-      nextState = advance(nextState);
-      nextState = expectSymbol(nextState, "]");
+      const [indexExpr, afterIndex] = parseExpression(nextState);
+      nextState = expectSymbol(afterIndex, "]");
+      return [{ tokenType: "Variable", name: [name, indexExpr] }, nextState];
     }
-    return [{ tokenType: "Variable", name: [name, index] }, nextState];
+    return [{ tokenType: "Variable", name: [name, 0] }, nextState];
   }
 
   if (current.kind === "symbol" && current.text === "(") {
@@ -246,15 +244,13 @@ function parseStatement(state: ParserState): [Token, ParserState] {
     case "set": {
       const [varName, afterName] = expectIdentifier(nextState);
       let cursor = afterName;
-      let index = 0;
+      let index: number | any = 0;
       const nextTok = peek(cursor);
       if (nextTok.kind === "symbol" && nextTok.text === "[") {
         cursor = advance(cursor);
-        const idxTok = peek(cursor);
-        if (idxTok.kind !== "number") throw new Error("Expected number for array index");
-        index = Number(idxTok.text);
-        cursor = advance(cursor);
-        cursor = expectSymbol(cursor, "]");
+        const [idxExpr, afterIdx] = parseExpression(cursor);
+        cursor = expectSymbol(afterIdx, "]");
+        index = idxExpr;
       }
       const [value, afterValue] = parseExpression(cursor);
       return [{ tokenType: "Assign", variable: [varName, index], value }, afterValue];

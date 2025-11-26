@@ -5,7 +5,7 @@ export type LiteralToken = {
   tokenType: "Literal";
   value: number;
 };
-export type VariableToken = { tokenType: "Variable"; name: [string, number] };
+export type VariableToken = { tokenType: "Variable"; name: [string, number | ValueToken] };
 export type MathToken = {
   tokenType: "Math";
   operator: "+" | "-" | "*" | "/";
@@ -28,7 +28,7 @@ export type IfToken = {
 };
 export type AssignToken = {
   tokenType: "Assign";
-  variable: [string, number];
+  variable: [string, number | ValueToken];
   value: ValueToken;
 };
 export type ShowToken = { tokenType: "Show"; value: ValueToken };
